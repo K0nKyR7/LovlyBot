@@ -149,26 +149,32 @@ async function handleMessage(msg) {
 
   // Команда /today (Time Capsule)
   if (text.startsWith('/today') || text.startsWith('/memory')) {
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return sendMessage(chatId, '⚠️ Supabase не настроен в .env, используем локальный режим.');
-    }
     try {
-      // Ищем случайное воспоминание
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/moments?select=*&limit=1`, {
-        headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'apikey': SUPABASE_KEY }
-      });
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const m = data[0];
-        await tg('sendPhoto', {
-          chat_id: chatId,
-          photo: m.imageUrl,
-          caption: `✨ <b>Воспоминание из нашего архива:</b>\n\n<b>${m.title}</b> (${m.date})\n${m.description || ''}`,
-          parse_mode: 'HTML'
+      let m = null;
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/moments?select=*&limit=1`, {
+          headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'apikey': SUPABASE_KEY }
         });
-      } else {
-        sendMessage(chatId, 'Архив пока пуст! Отправь мне ваше первое фото 📷');
+        const data = await res.json();
+        if (data && data.length > 0) m = data[0];
       }
+
+      if (!m) {
+        // Fallback to sample memory
+        m = {
+          title: "Тот самый день, когда всё началось",
+          date: "2024-12-21",
+          imageUrl: "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=1200&q=80",
+          description: "Наш первый день, с которого началась эта невероятная история. Помню каждую секунду и твою улыбку 💖"
+        };
+      }
+
+      await tg('sendPhoto', {
+        chat_id: chatId,
+        photo: m.imageUrl,
+        caption: `✨ <b>Воспоминание из нашего архива:</b>\n\n<b>${m.title}</b> (${m.date})\n${m.description || ''}`,
+        parse_mode: 'HTML'
+      });
     } catch (e) {
       sendMessage(chatId, 'Не удалось загрузить воспоминание: ' + e.message);
     }
@@ -177,18 +183,12 @@ async function handleMessage(msg) {
 
   // Обработка отправки фотографии
   if (msg.photo && msg.photo.length > 0) {
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return sendMessage(chatId, '⚠️ Задайте SUPABASE_URL и SUPABASE_KEY в файле .env бота, чтобы сохранять фото в облако.');
-    }
-
-    // Берём фото максимального разрешения
     const highestRes = msg.photo[msg.photo.length - 1];
     const caption = msg.caption || 'Наш прекрасный день';
 
     await sendMessage(chatId, '⏳ Загружаю и оптимизирую фото...');
 
     try {
-      // 1. Получаем путь к файлу на сервере Telegram
       const fileInfo = await tg('getFile', { file_id: highestRes.file_id });
       if (!fileInfo.ok || !fileInfo.result.file_path) {
         throw new Error('Не удалось получить файл от Telegram');
@@ -199,11 +199,20 @@ async function handleMessage(msg) {
       const arrayBuffer = await imgRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      // 2. Загружаем в Supabase Storage
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.jpg`;
-      const publicUrl = await uploadToSupabaseStorage(fileName, buffer, 'image/jpeg');
+      let publicUrl = '';
 
-      // 3. Создаем черновик момента
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        publicUrl = await uploadToSupabaseStorage(fileName, buffer, 'image/jpeg');
+      } else {
+        // Save locally to assets/photos
+        const localDir = path.resolve(process.cwd(), '../assets/photos');
+        if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+        const localFilePath = path.join(localDir, fileName);
+        fs.writeFileSync(localFilePath, buffer);
+        publicUrl = `assets/photos/${fileName}`;
+      }
+
       const momentId = `moment-${Date.now()}`;
       const today = new Date().toISOString().slice(0, 10);
 
@@ -219,10 +228,19 @@ async function handleMessage(msg) {
         createdAt: new Date().toISOString()
       };
 
-      // Сохраняем в Supabase
-      await saveMomentToSupabase(moment);
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        await saveMomentToSupabase(moment);
+      } else {
+        // Save to local moments.json
+        const jsonPath = path.resolve(process.cwd(), '../assets/moments.json');
+        let localList = [];
+        if (fs.existsSync(jsonPath)) {
+          try { localList = JSON.parse(fs.readFileSync(jsonPath, 'utf8')); } catch (e) {}
+        }
+        localList.unshift(moment);
+        fs.writeFileSync(jsonPath, JSON.stringify(localList, null, 2));
+      }
 
-      // Предлагаем выбрать категорию с помощью инлайн-кнопок
       pendingUploads.set(momentId, moment);
 
       const keyboard = {
@@ -243,7 +261,7 @@ async function handleMessage(msg) {
 
       await sendMessage(
         chatId,
-        `🎉 <b>Фото успешно добавлено на сайт!</b>\n\n` +
+        `🎉 <b>Фото успешно сохранено!</b>\n\n` +
         `📝 Заголовок: <i>${moment.title}</i>\n` +
         `📅 Дата: <i>${moment.date}</i>\n\n` +
         `Выбери категорию для этого момента:`,

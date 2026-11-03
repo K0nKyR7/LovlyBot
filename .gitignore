@@ -1,3 +1,18 @@
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+*.env
+
+# Dependencies & Build
+node_modules/
+dist/
+
+# User uploaded local photos
+assets/photos/*
+!assets/photos/.gitkeep
+
+# System & Logs
 .DS_Store
 Thumbs.db
 *.log
