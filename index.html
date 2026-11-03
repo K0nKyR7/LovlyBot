@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Наша История Любви • 21.12.2024</title>
+  
+  <!-- Favicon Heart -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💖</text></svg>">
+  <meta name="theme-color" content="#FAF7F5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            rose: {
+              50: '#fff1f2',
+              100: '#ffe4e6',
+              200: '#fecdd3',
+              300: '#fda4af',
+              400: '#fb7185',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+              800: '#9f1239',
+              900: '#881337',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Supabase Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="min-h-screen relative antialiased selection:bg-rose-200 selection:text-rose-900">
+
+  <!-- Background Floating Petals & Sparkles Canvas -->
+  <canvas id="petals-canvas"></canvas>
+
+  <!-- ==================== LOCK SCREEN (PIN PROTECTION) ==================== -->
+  <div id="lock-screen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gradient-to-br from-[#FAF7F5] via-[#FFF1F2] to-[#FCE7F3] transition-all duration-500">
+    <div class="glass-card max-w-sm w-full p-8 rounded-3xl shadow-xl shadow-rose-500/10 text-center relative border border-rose-200/80">
+      
+      <!-- Romantic Icon -->
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-400 flex items-center justify-center text-white shadow-lg shadow-rose-500/30 pulse-glow">
+        <i class="fa-solid fa-heart text-2xl"></i>
+      </div>
+
+      <h1 class="text-3xl font-serif-romantic font-bold text-zinc-800 mb-1">
+        Наша История
+      </h1>
+      <p class="text-xs text-zinc-500 mb-6 font-medium">
+        Введите наш секретный PIN-код
+      </p>
+
+      <!-- Pin indicator dots -->
+      <div id="pin-display" class="flex justify-center gap-4 mb-8">
+        <div class="pin-dot w-4 h-4 rounded-full border-2 border-rose-300 bg-transparent"></div>
+        <div class="pin-dot w-4 h-4 rounded-full border-2 border-rose-300 bg-transparent"></div>
+        <div class="pin-dot w-4 h-4 rounded-full border-2 border-rose-300 bg-transparent"></div>
+        <div class="pin-dot w-4 h-4 rounded-full border-2 border-rose-300 bg-transparent"></div>
+      </div>
+
+      <!-- Keypad -->
+      <div class="grid grid-cols-3 gap-3 max-w-[260px] mx-auto mb-4">
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="1">1</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="2">2</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="3">3</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="4">4</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="5">5</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="6">6</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="7">7</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="8">8</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="9">9</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/40 hover:bg-rose-100/40 text-xs font-medium text-zinc-400 flex items-center justify-center" data-val="clear">Сброс</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/70 hover:bg-rose-100/60 text-xl font-semibold text-zinc-800 shadow-sm border border-rose-100 flex items-center justify-center" data-val="0">0</button>
+        <button class="keypad-btn h-14 rounded-2xl bg-white/40 hover:bg-rose-100/40 text-base text-zinc-600 flex items-center justify-center" data-val="back">
+          <i class="fa-solid fa-delete-left"></i>
+        </button>
+      </div>
+
+      <p class="text-[11px] text-zinc-400">
+        Подсказка: день нашего начала (21.12 &rarr; 2112)
+      </p>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN APPLICATION CONTENT ==================== -->
+  <div id="main-content" class="hidden min-h-screen relative z-10 flex flex-col pb-20">
+    
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-40 backdrop-blur-md bg-[#FAF7F5]/85 border-b border-rose-100/80 transition-all">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        
+        <!-- Brand / Title -->
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-pink-400 flex items-center justify-center text-white shadow-sm shadow-rose-500/30">
+            <i class="fa-solid fa-heart text-sm"></i>
+          </span>
+          <div>
+            <h2 class="font-serif-romantic font-bold text-xl text-zinc-800 leading-tight">
+              Наша История
+            </h2>
+            <p class="text-[11px] text-rose-500 font-medium">с 21 декабря 2024</p>
+          </div>
+        </div>
+
+        <!-- Controls (Sound, Petals, Settings, Cloud status) -->
+        <div class="flex items-center gap-2">
+          <!-- Cloud status badge -->
+          <div id="cloud-sync-status" class="hidden sm:block"></div>
+
+          <!-- Ambient Music Toggle -->
+          <button 
+            id="music-toggle-btn" 
+            class="w-10 h-10 rounded-full bg-white/80 hover:bg-rose-50 border border-rose-100 text-zinc-700 flex items-center justify-center transition-all shadow-sm"
+            title="Включить романтическую музыку"
+          >
+            <i class="fa-solid fa-music text-sm"></i>
+          </button>
+
+          <!-- Petals Effect Toggle -->
+          <button 
+            id="petals-toggle-btn" 
+            class="w-10 h-10 rounded-full bg-white/80 hover:bg-rose-50 border border-rose-100 text-rose-500 flex items-center justify-center transition-all shadow-sm"
+            title="Эффект лепестков"
+          >
+            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+          </button>
+
+          <!-- Settings Button -->
+          <button 
+            id="open-settings-btn" 
+            class="w-10 h-10 rounded-full bg-white/80 hover:bg-rose-50 border border-rose-100 text-zinc-700 flex items-center justify-center transition-all shadow-sm"
+            title="Настройки и синхронизация"
+          >
+            <i class="fa-solid fa-gear text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 w-full pt-8">
+
+      <!-- ==================== HERO SECTION & TOGETHER COUNTER ==================== -->
+      <section class="glass-card rounded-3xl p-6 sm:p-10 mb-8 border border-rose-200/80 shadow-sm relative overflow-hidden text-center">
+        <!-- Decorative Ambient Glow Circles -->
+        <div class="absolute -top-16 -left-16 w-48 h-48 bg-rose-300/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-16 -right-16 w-48 h-48 bg-pink-300/25 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="relative z-10 max-w-2xl mx-auto">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-600 border border-rose-100 mb-4">
+            <i class="fa-solid fa-heart text-[10px]"></i> Мы вместе уже
+          </span>
+
+          <!-- Big Total Days Number -->
+          <div class="mb-4">
+            <span id="counter-total-days" class="text-5xl sm:text-7xl font-bold font-serif-romantic text-shimmer tracking-tight">
+              0
+            </span>
+            <span class="text-2xl sm:text-3xl font-serif-romantic text-rose-700/80 font-medium ml-1">
+              дней
+            </span>
+          </div>
+
+          <!-- Breakdown: Years, Months, Days, Hours, Minutes, Seconds -->
+          <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3 max-w-xl mx-auto mb-6">
+            <div class="bg-white/80 rounded-2xl p-2.5 border border-rose-100 shadow-sm">
+              <span id="counter-years" class="block text-xl sm:text-2xl font-bold text-zinc-800">0</span>
+              <span class="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Года</span>
+            </div>
+            <div class="bg-white/80 rounded-2xl p-2.5 border border-rose-100 shadow-sm">
+              <span id="counter-months" class="block text-xl sm:text-2xl font-bold text-zinc-800">0</span>
+              <span class="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Месяцев</span>
+            </div>
+            <div class="bg-white/80 rounded-2xl p-2.5 border border-rose-100 shadow-sm">
+              <span id="counter-days" class="block text-xl sm:text-2xl font-bold text-zinc-800">0</span>
+              <span class="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Дней</span>
+            </div>
+            <div class="bg-white/80 rounded-2xl p-2.5 border border-rose-100 shadow-sm">
+              <span id="counter-hours" class="block text-xl sm:text-2xl font-bold text-zinc-800">00</span>
+              <span class="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Часов</span>
+            </div>
+            <div class="bg-white/80 rounded-2xl p-2.5 border border-rose-100 shadow-sm">
+              <span id="counter-minutes" class="block text-xl sm:text-2xl font-bold text-zinc-800">00</span>
+              <span class="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Минут</span>
+            </div>
+            <div class="bg-white/80 rounded-2xl p-2.5 border border-rose-100 shadow-sm">
+              <span id="counter-seconds" class="block text-xl sm:text-2xl font-bold text-rose-600">00</span>
+              <span class="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Секунд</span>
+            </div>
+          </div>
+
+          <!-- Anniversary Countdown Badge -->
+          <div class="inline-block bg-rose-50/80 px-4 py-2 rounded-full border border-rose-200/60 mb-5">
+            <span id="next-anniversary-badge" class="text-xs sm:text-sm font-medium text-rose-700">
+              Считаем дни до годовщины...
+            </span>
+          </div>
+
+          <!-- Quote -->
+          <p class="font-handwriting text-xl sm:text-2xl text-zinc-600 italic leading-snug">
+            «В тебе есть весь мой мир, всё мое счастье и всё моё спокойствие»
+          </p>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW SWITCHER & ADD BUTTON ==================== -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
+        
+        <!-- View Tabs -->
+        <div class="inline-flex p-1.5 rounded-2xl bg-white/80 border border-rose-100 shadow-sm self-start sm:self-auto">
+          <button class="view-tab-btn active px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 bg-rose-500 text-white shadow-md shadow-rose-500/20" data-view="timeline">
+            <i class="fa-solid fa-timeline"></i>
+            <span>Лента историй</span>
+          </button>
+          <button class="view-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 text-zinc-600 hover:text-rose-600" data-view="gallery">
+            <i class="fa-solid fa-border-all"></i>
+            <span>Галерея</span>
+          </button>
+          <button class="view-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 text-zinc-600 hover:text-rose-600" data-view="letters">
+            <i class="fa-solid fa-envelope-open-text"></i>
+            <span>Письма любви</span>
+          </button>
+        </div>
+
+        <!-- Add Moment Button -->
+        <button 
+          id="open-add-moment-btn" 
+          class="py-2.5 px-5 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-semibold text-sm shadow-md shadow-rose-500/25 flex items-center justify-center gap-2 transition-all active:scale-95"
+        >
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>Добавить момент</span>
+        </button>
+      </div>
+
+      <!-- ==================== CATEGORY FILTER BAR ==================== -->
+      <section id="filter-section" class="mb-8">
+        <div id="category-pills" class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 1: TIMELINE ==================== -->
+      <section id="timeline-view">
+        <div id="timeline-list" class="max-w-2xl mx-auto">
+          <!-- Cards rendered by JS -->
+        </div>
+        <!-- Empty State -->
+        <div id="empty-timeline-state" class="hidden text-center py-16">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-rose-50 flex items-center justify-center text-rose-300">
+            <i class="fa-solid fa-camera-retro text-2xl"></i>
+          </div>
+          <h4 class="font-serif-romantic text-2xl font-bold text-zinc-700 mb-1">Пока нет воспоминаний</h4>
+          <p class="text-sm text-zinc-400 mb-4">Нажмите кнопку «Добавить момент», чтобы сохранить ваше первое фото!</p>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 2: MASONRY GALLERY ==================== -->
+      <section id="gallery-view" class="hidden">
+        <div id="masonry-grid" class="masonry-grid">
+          <!-- Masonry cards rendered by JS -->
+        </div>
+        <!-- Empty State -->
+        <div id="empty-gallery-state" class="hidden text-center py-16">
+          <p class="text-zinc-400 text-sm">В этой категории пока нет фото</p>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 3: LOVE LETTERS ==================== -->
+      <section id="letters-view" class="hidden">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h3 class="text-2xl font-serif-romantic font-bold text-zinc-800">
+              «Открыть, когда...»
+            </h3>
+            <p class="text-xs text-zinc-500">Трогательные конверты с посланиями для особенных минут</p>
+          </div>
+          <button 
+            id="open-add-letter-btn" 
+            class="py-2 px-4 rounded-xl bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs sm:text-sm font-semibold shadow-sm transition-all flex items-center gap-1.5"
+          >
+            <i class="fa-solid fa-pen-nib"></i>
+            <span>Написать письмо</span>
+          </button>
+        </div>
+        <div id="letters-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Letters rendered by JS -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================== MODAL: ADD MOMENT ==================== -->
+  <div id="add-moment-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="glass-card max-w-lg w-full rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto shadow-2xl border border-rose-100 relative">
+      
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-2xl font-serif-romantic font-bold text-zinc-800">
+          Новое воспоминание
+        </h3>
+        <button id="close-add-moment-btn" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <form id="add-moment-form" class="space-y-4">
+        <!-- Photo Dropzone -->
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Фотография</label>
+          <input type="file" id="moment-file-input" accept="image/*" class="hidden">
+          
+          <div id="moment-dropzone" class="border-2 border-dashed border-rose-200 hover:border-rose-400 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-white/50">
+            <div class="w-12 h-12 mx-auto mb-2 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+              <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+            </div>
+            <p class="text-sm font-medium text-zinc-700">Нажмите для выбора фото</p>
+            <p class="text-xs text-zinc-400 mt-0.5">или перетащите файл сюда (камера телефона поддерживается)</p>
+          </div>
+
+          <!-- Preview -->
+          <div id="preview-container" class="hidden relative rounded-2xl overflow-hidden aspect-video bg-zinc-900 border border-rose-100">
+            <img id="moment-img-preview" src="" alt="Preview" class="w-full h-full object-cover">
+            <button type="button" id="remove-photo-btn" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Title -->
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Заголовок / Название момента</label>
+          <input 
+            type="text" 
+            id="moment-title-input" 
+            required 
+            placeholder="Например: Прогулка под дождём" 
+            class="w-full px-4 py-2.5 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
+          >
+        </div>
+
+        <!-- Date & Category row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Дата</label>
+            <input 
+              type="date" 
+              id="moment-date-input" 
+              required 
+              class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
+            >
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Категория</label>
+            <select 
+              id="moment-category-input" 
+              class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
+            >
+              <option value="Свидания">Свидания</option>
+              <option value="Путешествия">Путешествия</option>
+              <option value="Уютные дни" selected>Уютные дни</option>
+              <option value="Смешные моменты">Смешные моменты</option>
+              <option value="Памятные даты">Памятные даты</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Место / Город (необязательно)</label>
+          <input 
+            type="text" 
+            id="moment-location-input" 
+            placeholder="Например: Санкт-Петербург, Набережная" 
+            class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
+          >
+        </div>
+
+        <!-- Story / Description -->
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">История или теплые слова</label>
+          <textarea 
+            id="moment-desc-input" 
+            rows="3" 
+            placeholder="Что происходило в этот день? Что ты чувствовал(а)?" 
+            class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm resize-none"
+          ></textarea>
+        </div>
+
+        <!-- Submit Button -->
+        <button 
+          type="submit" 
+          id="submit-moment-btn" 
+          class="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-semibold text-sm shadow-md shadow-rose-500/25 transition-all mt-2"
+        >
+          Сохранить момент
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: ADD LOVE LETTER ==================== -->
+  <div id="add-letter-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="glass-card max-w-md w-full rounded-3xl p-6 sm:p-8 shadow-2xl border border-rose-100 relative">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-2xl font-serif-romantic font-bold text-zinc-800">
+          Новое письмо
+        </h3>
+        <button id="close-add-letter-btn" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <form id="add-letter-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Когда открыть? (Заголовок)</label>
+          <input 
+            type="text" 
+            id="letter-title-input" 
+            required 
+            placeholder="Например: Открыть, когда грустно" 
+            class="w-full px-4 py-2.5 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
+          >
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Метка / Повод</label>
+          <input 
+            type="text" 
+            id="letter-badge-input" 
+            placeholder="Например: Для улыбки" 
+            class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
+          >
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Текст письма</label>
+          <textarea 
+            id="letter-content-input" 
+            required 
+            rows="5" 
+            placeholder="Напишите искренние слова, которые согреют в нужный момент..." 
+            class="w-full px-4 py-2.5 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm resize-none font-handwriting text-lg text-zinc-700"
+          ></textarea>
+        </div>
+        <button 
+          type="submit" 
+          class="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-semibold text-sm shadow-md shadow-rose-500/25 transition-all"
+        >
+          Запечатать в конверт
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: LETTER READER ==================== -->
+  <div id="letter-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="glass-card max-w-lg w-full rounded-3xl p-8 sm:p-10 shadow-2xl border border-rose-200 relative bg-[#FFFDF9]">
+      <div class="text-center mb-6">
+        <span id="letter-modal-badge" class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 mb-3">
+          Для тебя
+        </span>
+        <h3 id="letter-modal-title" class="text-2xl sm:text-3xl font-serif-romantic font-bold text-zinc-800">
+          Заголовок письма
+        </h3>
+        <div class="w-16 h-0.5 bg-rose-300 mx-auto mt-3"></div>
+      </div>
+
+      <div class="py-2 px-1 max-h-[50vh] overflow-y-auto">
+        <p id="letter-modal-content" class="font-handwriting text-2xl sm:text-3xl text-zinc-700 leading-relaxed whitespace-pre-line">
+          Текст письма...
+        </p>
+      </div>
+
+      <div class="mt-8 text-center">
+        <button id="letter-modal-close-btn" class="px-6 py-2.5 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold shadow-md shadow-rose-500/20 transition-all">
+          Закрыть письмо
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: LIGHTBOX ==================== -->
+  <div id="lightbox-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/90 backdrop-blur-md p-4">
+    <!-- Close Button -->
+    <button id="lightbox-close-btn" class="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors">
+      <i class="fa-solid fa-xmark text-lg"></i>
+    </button>
+
+    <!-- Navigation Prev/Next -->
+    <button id="lightbox-prev-btn" class="absolute left-4 top-1/2 -translate-y-1/2 z-50 w-12 h-12 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all">
+      <i class="fa-solid fa-chevron-left text-lg"></i>
+    </button>
+    <button id="lightbox-next-btn" class="absolute right-4 top-1/2 -translate-y-1/2 z-50 w-12 h-12 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all">
+      <i class="fa-solid fa-chevron-right text-lg"></i>
+    </button>
+
+    <!-- Main Container -->
+    <div class="max-w-4xl w-full flex flex-col items-center max-h-[92vh]">
+      <div class="relative overflow-hidden rounded-2xl max-h-[75vh] flex items-center justify-center">
+        <img id="lightbox-img" src="" alt="" class="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl">
+      </div>
+      
+      <!-- Details below photo -->
+      <div class="w-full mt-4 text-white flex items-start justify-between gap-4 px-2">
+        <div>
+          <h3 id="lightbox-title" class="text-xl sm:text-2xl font-serif-romantic font-bold"></h3>
+          <p id="lightbox-date" class="text-xs text-rose-300 mt-0.5"></p>
+          <p id="lightbox-desc" class="text-sm text-zinc-300 mt-2 max-w-2xl font-light whitespace-pre-line"></p>
+        </div>
+        <a id="lightbox-download-btn" href="#" download class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap">
+          <i class="fa-solid fa-download"></i>
+          <span>Скачать</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: SETTINGS & BACKUP ==================== -->
+  <div id="settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="glass-card max-w-lg w-full rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto shadow-2xl border border-rose-100 relative">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-2xl font-serif-romantic font-bold text-zinc-800">
+          Настройки
+        </h3>
+        <button id="close-settings-btn" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <form id="settings-form" class="space-y-4">
+        <!-- Date -->
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1">Дата начала отношений</label>
+          <input 
+            type="date" 
+            id="settings-date-input" 
+            class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white text-sm"
+          >
+        </div>
+
+        <!-- PIN -->
+        <div>
+          <label class="block text-xs font-semibold text-zinc-600 mb-1">Секретный PIN-код (4 цифры)</label>
+          <input 
+            type="password" 
+            id="settings-pin-input" 
+            maxlength="4" 
+            class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white text-sm tracking-widest"
+          >
+          <p class="text-[11px] text-zinc-400 mt-1">Используется для защиты галереи от посторонних</p>
+        </div>
+
+        <hr class="border-rose-100 my-4">
+
+        <!-- Supabase Cloud Sync -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-zinc-700">Облачная синхронизация (Supabase)</label>
+            <span class="text-[11px] text-rose-500 font-medium">Бесплатно</span>
+          </div>
+          <p class="text-[11px] text-zinc-500 mb-2">
+            Позволяет вам и вашей девушке загружать фото с телефонов из любой точки мира.
+          </p>
+          <div class="space-y-2">
+            <input 
+              type="text" 
+              id="settings-supabase-url" 
+              placeholder="Project URL (например: https://xyz.supabase.co)" 
+              class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white text-xs font-mono"
+            >
+            <input 
+              type="password" 
+              id="settings-supabase-key" 
+              placeholder="Anon Public API Key" 
+              class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white text-xs font-mono"
+            >
+          </div>
+        </div>
+
+        <!-- Submit Settings -->
+        <button 
+          type="submit" 
+          class="w-full py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-semibold text-sm shadow-md shadow-rose-500/20 transition-all"
+        >
+          Сохранить изменения
+        </button>
+      </form>
+
+      <hr class="border-rose-100 my-5">
+
+      <!-- Backup Export & Import -->
+      <div>
+        <label class="block text-xs font-semibold text-zinc-700 mb-2">Резервная копия (бэкап)</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button 
+            type="button" 
+            id="export-backup-btn" 
+            class="py-2 px-3 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <i class="fa-solid fa-download"></i>
+            <span>Экспорт JSON</span>
+          </button>
+          <input type="file" id="import-backup-input" accept=".json" class="hidden">
+          <button 
+            type="button" 
+            id="import-backup-btn" 
+            class="py-2 px-3 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <i class="fa-solid fa-upload"></i>
+            <span>Импорт JSON</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main JavaScript App Entry (self-contained bundle) -->
+  <script src="js/bundle.js"></script>
+</body>
+</html>

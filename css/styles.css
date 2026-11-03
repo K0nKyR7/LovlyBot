@@ -1,0 +1,157 @@
+/* Custom romantic styles & animations */
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-hand: 'Caveat', cursive;
+  --color-rose-glow: rgba(244, 63, 94, 0.15);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #FAF7F5;
+  color: #2D2727;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.font-serif-romantic {
+  font-family: var(--font-serif);
+}
+
+.font-handwriting {
+  font-family: var(--font-hand);
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(254, 205, 211, 0.55);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px -8px rgba(225, 29, 72, 0.12);
+  border-color: rgba(251, 113, 133, 0.6);
+}
+
+/* Floating particles canvas */
+#petals-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF7F5;
+}
+::-webkit-scrollbar-thumb {
+  background: #FDA4AF;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #F43F5E;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Pin Code Keypad Animation */
+.pin-dot {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pin-dot.filled {
+  background-color: #E11D48;
+  transform: scale(1.25);
+  box-shadow: 0 0 14px rgba(225, 29, 72, 0.5);
+  border-color: #E11D48;
+}
+
+.keypad-btn {
+  transition: all 0.12s ease;
+  user-select: none;
+}
+.keypad-btn:active {
+  transform: scale(0.92);
+  background-color: rgba(254, 205, 211, 0.7);
+}
+
+/* Shake animation for wrong PIN */
+@keyframes shakeAnimation {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+.animate-shake {
+  animation: shakeAnimation 0.4s ease-in-out;
+}
+
+/* Heart pop animation */
+@keyframes heartPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.animate-heart-pop {
+  animation: heartPop 0.35s ease-in-out;
+}
+
+/* Subtle breathing glow */
+@keyframes romanticPulse {
+  0%, 100% {
+    box-shadow: 0 0 25px rgba(244, 63, 94, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 45px rgba(244, 63, 94, 0.35);
+  }
+}
+.pulse-glow {
+  animation: romanticPulse 3.5s infinite ease-in-out;
+}
+
+/* Shimmer gradient */
+.text-shimmer {
+  background: linear-gradient(135deg, #E11D48 0%, #FB7185 50%, #BE123C 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Masonry column support */
+.masonry-grid {
+  column-count: 1;
+  column-gap: 1.25rem;
+}
+@media (min-width: 640px) {
+  .masonry-grid {
+    column-count: 2;
+  }
+}
+@media (min-width: 1024px) {
+  .masonry-grid {
+    column-count: 3;
+  }
+}
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 1.25rem;
+}
