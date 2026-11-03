@@ -232,10 +232,6 @@
             <i class="fa-solid fa-border-all"></i>
             <span>Галерея</span>
           </button>
-          <button class="view-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 text-zinc-600 hover:text-rose-600" data-view="letters">
-            <i class="fa-solid fa-envelope-open-text"></i>
-            <span>Письма любви</span>
-          </button>
         </div>
 
         <!-- Add Moment Button -->
@@ -278,28 +274,6 @@
         <!-- Empty State -->
         <div id="empty-gallery-state" class="hidden text-center py-16">
           <p class="text-zinc-400 text-sm">В этой категории пока нет фото</p>
-        </div>
-      </section>
-
-      <!-- ==================== VIEW 3: LOVE LETTERS ==================== -->
-      <section id="letters-view" class="hidden">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h3 class="text-2xl font-serif-romantic font-bold text-zinc-800">
-              «Открыть, когда...»
-            </h3>
-            <p class="text-xs text-zinc-500">Трогательные конверты с посланиями для особенных минут</p>
-          </div>
-          <button 
-            id="open-add-letter-btn" 
-            class="py-2 px-4 rounded-xl bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs sm:text-sm font-semibold shadow-sm transition-all flex items-center gap-1.5"
-          >
-            <i class="fa-solid fa-pen-nib"></i>
-            <span>Написать письмо</span>
-          </button>
-        </div>
-        <div id="letters-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Letters rendered by JS -->
         </div>
       </section>
 
@@ -411,85 +385,6 @@
           Сохранить момент
         </button>
       </form>
-    </div>
-  </div>
-
-  <!-- ==================== MODAL: ADD LOVE LETTER ==================== -->
-  <div id="add-letter-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div class="glass-card max-w-md w-full rounded-3xl p-6 sm:p-8 shadow-2xl border border-rose-100 relative">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-2xl font-serif-romantic font-bold text-zinc-800">
-          Новое письмо
-        </h3>
-        <button id="close-add-letter-btn" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-colors">
-          <i class="fa-solid fa-xmark text-sm"></i>
-        </button>
-      </div>
-
-      <form id="add-letter-form" class="space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Когда открыть? (Заголовок)</label>
-          <input 
-            type="text" 
-            id="letter-title-input" 
-            required 
-            placeholder="Например: Открыть, когда грустно" 
-            class="w-full px-4 py-2.5 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
-          >
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Метка / Повод</label>
-          <input 
-            type="text" 
-            id="letter-badge-input" 
-            placeholder="Например: Для улыбки" 
-            class="w-full px-4 py-2 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
-          >
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-zinc-600 mb-1.5">Текст письма</label>
-          <textarea 
-            id="letter-content-input" 
-            required 
-            rows="5" 
-            placeholder="Напишите искренние слова, которые согреют в нужный момент..." 
-            class="w-full px-4 py-2.5 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm resize-none font-handwriting text-lg text-zinc-700"
-          ></textarea>
-        </div>
-        <button 
-          type="submit" 
-          class="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-semibold text-sm shadow-md shadow-rose-500/25 transition-all"
-        >
-          Запечатать в конверт
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ==================== MODAL: LETTER READER ==================== -->
-  <div id="letter-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div class="glass-card max-w-lg w-full rounded-3xl p-8 sm:p-10 shadow-2xl border border-rose-200 relative bg-[#FFFDF9]">
-      <div class="text-center mb-6">
-        <span id="letter-modal-badge" class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 mb-3">
-          Для тебя
-        </span>
-        <h3 id="letter-modal-title" class="text-2xl sm:text-3xl font-serif-romantic font-bold text-zinc-800">
-          Заголовок письма
-        </h3>
-        <div class="w-16 h-0.5 bg-rose-300 mx-auto mt-3"></div>
-      </div>
-
-      <div class="py-2 px-1 max-h-[50vh] overflow-y-auto">
-        <p id="letter-modal-content" class="font-handwriting text-2xl sm:text-3xl text-zinc-700 leading-relaxed whitespace-pre-line">
-          Текст письма...
-        </p>
-      </div>
-
-      <div class="mt-8 text-center">
-        <button id="letter-modal-close-btn" class="px-6 py-2.5 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold shadow-md shadow-rose-500/20 transition-all">
-          Закрыть письмо
-        </button>
-      </div>
     </div>
   </div>
 

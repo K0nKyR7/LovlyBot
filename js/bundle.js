@@ -78,37 +78,6 @@
     }
   ];
 
-  const INITIAL_LETTERS = [
-    {
-      id: "letter-1",
-      triggerTitle: "Открыть, когда скучаешь по мне",
-      badge: "Для грустных минут",
-      color: "from-rose-500 to-pink-500",
-      content: "Знай, что где бы я ни был прямо сейчас, мои мысли возвращаются к тебе. Закрой на секунду глаза и представь, как я крепко обнимаю тебя. Я тебя очень сильно люблю и уже спешу к тебе."
-    },
-    {
-      id: "letter-2",
-      triggerTitle: "Открыть, когда выдался тяжелый день",
-      badge: "Для поддержки",
-      color: "from-amber-500 to-rose-400",
-      content: "Ты у меня самая сильная, умная и прекрасная. Этот день обязательно закончится, а всё плохое развеется. Сделай глубокий вдох, завари вкусный чай, а дома тебя ждет тепло, забота и массаж плеч!"
-    },
-    {
-      id: "letter-3",
-      triggerTitle: "Открыть в нашу годовщину",
-      badge: "21 декабря",
-      color: "from-red-600 to-rose-600",
-      content: "Каждый день с 21 декабря 2024 года — это подарок судьбы. Спасибо тебе за твою нежность, понимание и за то, как ты озаряешь мою жизнь. Я выбираю тебя вчера, сегодня и каждый следующий день."
-    },
-    {
-      id: "letter-4",
-      triggerTitle: "Открыть, когда сомневаешься в себе",
-      badge: "Вдохновение",
-      color: "from-purple-500 to-pink-500",
-      content: "Ты даже не представляешь, сколько в тебе таланта, красоты и света. Я верю в тебя безоговорочно. У тебя всё получится, а я всегда буду твоей главной поддержкой и опорой."
-    }
-  ];
-
   const CATEGORIES = [
     "Все",
     "Свидания",
@@ -428,7 +397,6 @@
   const DB_NAME = 'LoveStoryDB';
   const DB_VERSION = 1;
   const STORE_MOMENTS = 'moments';
-  const STORE_LETTERS = 'letters';
   const STORE_SETTINGS = 'settings';
 
   class StorageManager {
@@ -443,9 +411,6 @@
           const db = event.target.result;
           if (!db.objectStoreNames.contains(STORE_MOMENTS)) {
             db.createObjectStore(STORE_MOMENTS, { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains(STORE_LETTERS)) {
-            db.createObjectStore(STORE_LETTERS, { keyPath: 'id' });
           }
           if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
             db.createObjectStore(STORE_SETTINGS, { keyPath: 'key' });
@@ -469,12 +434,6 @@
       if (!existingMoments || existingMoments.length === 0) {
         for (const m of INITIAL_MOMENTS) {
           await this.putToStore(STORE_MOMENTS, m);
-        }
-      }
-      const existingLetters = await this.getAllFromStore(STORE_LETTERS);
-      if (!existingLetters || existingLetters.length === 0) {
-        for (const l of INITIAL_LETTERS) {
-          await this.putToStore(STORE_LETTERS, l);
         }
       }
       const pin = await this.getSetting('pin');
@@ -648,43 +607,12 @@
       }
     }
 
-    async getLetters() {
-      if (this.supabaseClient) {
-        try {
-          const { data, error } = await this.supabaseClient.from('letters').select('*');
-          if (!error && data && data.length > 0) return data;
-        } catch (e) {}
-      }
-      return this.getAllFromStore(STORE_LETTERS);
-    }
-
-    async saveLetter(letter) {
-      await this.putToStore(STORE_LETTERS, letter);
-      if (this.supabaseClient) {
-        try {
-          await this.supabaseClient.from('letters').upsert(letter);
-        } catch (e) {}
-      }
-      return letter;
-    }
-
-    async deleteLetter(id) {
-      await this.deleteFromStore(STORE_LETTERS, id);
-      if (this.supabaseClient) {
-        try {
-          await this.supabaseClient.from('letters').delete().eq('id', id);
-        } catch (e) {}
-      }
-    }
-
     async exportBackup() {
       const moments = await this.getAllFromStore(STORE_MOMENTS);
-      const letters = await this.getAllFromStore(STORE_LETTERS);
       const backup = {
         version: 1,
         exportedAt: new Date().toISOString(),
-        moments,
-        letters
+        moments
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -701,11 +629,6 @@
         if (data.moments && Array.isArray(data.moments)) {
           for (const m of data.moments) {
             await this.putToStore(STORE_MOMENTS, m);
-          }
-        }
-        if (data.letters && Array.isArray(data.letters)) {
-          for (const l of data.letters) {
-            await this.putToStore(STORE_LETTERS, l);
           }
         }
         return true;
@@ -799,39 +722,10 @@
     `;
   }
 
-  function renderLetterCard(letter) {
-    return `
-      <div class="envelope-card glass-card rounded-2xl p-6 border border-rose-200/70 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-rose-200/40 to-pink-300/30 rounded-bl-full pointer-events-none"></div>
-        <div class="flex items-center justify-between mb-4">
-          <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700">
-            ${escapeHtml(letter.badge || 'Для тебя')}
-          </span>
-          <button class="delete-letter-btn text-zinc-300 hover:text-rose-500 transition-colors p-1" data-id="${letter.id}" title="Удалить">
-            <i class="fa-regular fa-trash-can text-xs"></i>
-          </button>
-        </div>
-        <div class="mb-4">
-          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-400 flex items-center justify-center text-white shadow-md shadow-rose-500/25 mb-3 group-hover:scale-110 transition-transform">
-            <i class="fa-solid fa-envelope-open-text text-xl"></i>
-          </div>
-          <h3 class="text-lg font-bold text-zinc-800 font-serif-romantic leading-snug">
-            ${escapeHtml(letter.triggerTitle)}
-          </h3>
-        </div>
-        <button class="open-letter-btn w-full py-2.5 px-4 rounded-xl text-sm font-semibold bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 transition-all flex items-center justify-center gap-2 shadow-sm" data-id="${letter.id}">
-          <span>Распечатать конверт</span>
-          <i class="fa-solid fa-arrow-right text-xs"></i>
-        </button>
-      </div>
-    `;
-  }
-
   // --- 8. MAIN APP CONTROLLER ---
   class LoveStoryApp {
     constructor() {
       this.moments = [];
-      this.letters = [];
       this.currentView = 'timeline';
       this.currentFilter = 'Все';
       this.currentPinInput = '';
@@ -952,7 +846,6 @@
 
     async loadAndRenderAll() {
       this.moments = await this.storage.getMoments();
-      this.letters = await this.storage.getLetters();
       this.renderCategoryPills();
       this.renderCurrentView();
       this.updateCloudStatusIndicator();
@@ -988,12 +881,10 @@
     renderCurrentView() {
       const timelineView = document.getElementById('timeline-view');
       const galleryView = document.getElementById('gallery-view');
-      const lettersView = document.getElementById('letters-view');
       const filterSection = document.getElementById('filter-section');
 
       timelineView.classList.add('hidden');
       galleryView.classList.add('hidden');
-      lettersView.classList.add('hidden');
 
       if (this.currentView === 'timeline') {
         timelineView.classList.remove('hidden');
@@ -1003,10 +894,6 @@
         galleryView.classList.remove('hidden');
         filterSection.classList.remove('hidden');
         this.renderGallery();
-      } else if (this.currentView === 'letters') {
-        lettersView.classList.remove('hidden');
-        filterSection.classList.add('hidden');
-        this.renderLetters();
       }
     }
 
@@ -1038,31 +925,6 @@
       emptyState.classList.add('hidden');
       grid.innerHTML = filtered.map(m => renderGalleryCard(m)).join('');
       this.bindMomentActions();
-    }
-
-    renderLetters() {
-      const grid = document.getElementById('letters-grid');
-      if (!grid) return;
-      grid.innerHTML = this.letters.map(l => renderLetterCard(l)).join('');
-
-      grid.querySelectorAll('.open-letter-btn').forEach(btn => {
-        btn.onclick = () => {
-          const id = btn.getAttribute('data-id');
-          const letter = this.letters.find(l => l.id === id);
-          if (letter) this.showLetterModal(letter);
-        };
-      });
-
-      grid.querySelectorAll('.delete-letter-btn').forEach(btn => {
-        btn.onclick = async () => {
-          if (confirm('Удалить это письмо?')) {
-            const id = btn.getAttribute('data-id');
-            await this.storage.deleteLetter(id);
-            this.letters = await this.storage.getLetters();
-            this.renderLetters();
-          }
-        };
-      });
     }
 
     bindMomentActions() {
@@ -1172,26 +1034,6 @@
       this.openLightbox(list[nextIdx]);
     }
 
-    showLetterModal(letter) {
-      const modal = document.getElementById('letter-modal');
-      const title = document.getElementById('letter-modal-title');
-      const content = document.getElementById('letter-modal-content');
-      const badge = document.getElementById('letter-modal-badge');
-
-      title.innerText = letter.triggerTitle;
-      content.innerText = letter.content;
-      badge.innerText = letter.badge || 'Для тебя';
-
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    }
-
-    closeLetterModal() {
-      const modal = document.getElementById('letter-modal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-    }
-
     setupGlobalEvents() {
       document.querySelectorAll('.view-tab-btn').forEach(btn => {
         btn.onclick = () => {
@@ -1237,11 +1079,6 @@
       document.getElementById('lightbox-next-btn').onclick = () => this.navigateLightbox(1);
       document.getElementById('lightbox-modal').onclick = (e) => {
         if (e.target.id === 'lightbox-modal') this.closeLightbox();
-      };
-
-      document.getElementById('letter-modal-close-btn').onclick = () => this.closeLetterModal();
-      document.getElementById('letter-modal').onclick = (e) => {
-        if (e.target.id === 'letter-modal') this.closeLetterModal();
       };
 
       const addMomentModal = document.getElementById('add-moment-modal');
@@ -1291,21 +1128,6 @@
       document.getElementById('add-moment-form').onsubmit = async (e) => {
         e.preventDefault();
         await this.saveNewMoment();
-      };
-
-      const addLetterModal = document.getElementById('add-letter-modal');
-      document.getElementById('open-add-letter-btn').onclick = () => {
-        document.getElementById('add-letter-form').reset();
-        addLetterModal.classList.remove('hidden');
-        addLetterModal.classList.add('flex');
-      };
-      document.getElementById('close-add-letter-btn').onclick = () => {
-        addLetterModal.classList.add('hidden');
-        addLetterModal.classList.remove('flex');
-      };
-      document.getElementById('add-letter-form').onsubmit = async (e) => {
-        e.preventDefault();
-        await this.saveNewLetter();
       };
 
       const settingsModal = document.getElementById('settings-modal');
@@ -1405,32 +1227,6 @@
       saveBtn.innerText = 'Сохранить момент';
       document.getElementById('add-moment-modal').classList.add('hidden');
       document.getElementById('add-moment-modal').classList.remove('flex');
-    }
-
-    async saveNewLetter() {
-      const triggerTitle = document.getElementById('letter-title-input').value.trim();
-      const badge = document.getElementById('letter-badge-input').value.trim();
-      const content = document.getElementById('letter-content-input').value.trim();
-
-      if (!triggerTitle || !content) {
-        alert('Заполните заголовок и текст письма!');
-        return;
-      }
-
-      const newLetter = {
-        id: `letter-${Date.now()}`,
-        triggerTitle,
-        badge: badge || 'Для тебя',
-        content,
-        createdAt: new Date().toISOString()
-      };
-
-      await this.storage.saveLetter(newLetter);
-      this.letters = await this.storage.getLetters();
-      this.renderLetters();
-
-      document.getElementById('add-letter-modal').classList.add('hidden');
-      document.getElementById('add-letter-modal').classList.remove('flex');
     }
 
     async populateSettingsForm() {

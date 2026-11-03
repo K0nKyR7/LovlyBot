@@ -35,31 +35,7 @@ CREATE POLICY "Allow public delete to moments"
 ON public.moments FOR DELETE USING (true);
 
 
--- 2. Таблица для писем («Открыть, когда...»)
-CREATE TABLE IF NOT EXISTS public.letters (
-    id TEXT PRIMARY KEY,
-    "triggerTitle" TEXT NOT NULL,
-    badge TEXT DEFAULT 'Для тебя',
-    content TEXT NOT NULL,
-    "createdAt" TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.letters ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Allow public read access to letters" 
-ON public.letters FOR SELECT USING (true);
-
-CREATE POLICY "Allow public insert to letters" 
-ON public.letters FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow public update to letters" 
-ON public.letters FOR UPDATE USING (true);
-
-CREATE POLICY "Allow public delete to letters" 
-ON public.letters FOR DELETE USING (true);
-
-
--- 3. Бакет хранилища для фотографий
+-- 2. Бакет хранилища для фотографий
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('photos', 'photos', true)
 ON CONFLICT (id) DO NOTHING;
