@@ -8,6 +8,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
 
 // Загрузка .env файла вручную (без внешнего пакета dotenv)
 function loadEnv() {
@@ -33,12 +34,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const START_DATE = new Date('2024-12-21T00:00:00');
 
-if (!BOT_TOKEN) {
-  console.error('❌ ОШИБКА: Задайте TELEGRAM_BOT_TOKEN в файле .env');
-  process.exit(1);
-}
-
-const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const TG_API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : '';
 
 // Хранилище временного состояния для выбора категорий
 const pendingUploads = new Map();
@@ -326,6 +322,17 @@ async function pollUpdates() {
   setImmediate(pollUpdates);
 }
 
+// HTTP сервер для бесплатного хостинга на Render.com (health-check)
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('💖 Наша История • Telegram-бот активен и работает 24/7 на Render!');
+});
+
+server.listen(PORT, () => {
+  console.log(`🌐 HTTP сервер запущен на порту ${PORT} (Render.com health-check готов)`);
+});
+
 // Запуск бота
 console.log('----------------------------------------------------');
 console.log('🤖 Telegram-бот «Семейный летописец» запускается...');
@@ -333,8 +340,12 @@ console.log(`💖 Отсчет отношений: 21.12.2024 (прошло ${ge
 if (ALLOWED_USERS.length > 0) {
   console.log(`🔒 Белый список пользователей: ${ALLOWED_USERS.join(', ')}`);
 } else {
-  console.log('⚠️ Внимание: ALLOWED_USER_IDS не задан в .env — бот принимает сообщения от любого пользователя.');
+  console.log('⚠️ Внимание: ALLOWED_USER_IDS не задан — бот принимает сообщения от любого пользователя.');
 }
 console.log('----------------------------------------------------');
 
-pollUpdates();
+if (BOT_TOKEN) {
+  pollUpdates();
+} else {
+  console.warn('⚠️ Внимание: TELEGRAM_BOT_TOKEN не задан. Бот ожидает настройки Environment Variables.');
+}

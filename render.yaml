@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: love-story-bot
+    env: node
+    rootDir: telegram-bot
+    buildCommand: node -v
+    startCommand: node bot.js
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ALLOWED_USER_IDS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
