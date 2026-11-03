@@ -21,7 +21,9 @@
       title: "День, когда всё началось",
       date: "2024-12-21",
       category: "Памятные даты",
-      location: "Тот самый зимний вечер",
+      location: "Тот самый зимний вечер • Москва",
+      lat: 55.7539,
+      lng: 37.6208,
       description: "Наш первый день, с которого началась эта невероятная история. Помню каждую секунду, твою улыбку и то ощущение, что теперь всё будет совершенно иначе.",
       imageUrl: "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=1200&q=80",
       likes: 12,
@@ -33,7 +35,9 @@
       title: "Кофе, снег и твои тёплые варежки",
       date: "2025-01-08",
       category: "Свидания",
-      location: "Уютная кофейня в центре",
+      location: "Уютная кофейня в центре • Москва",
+      lat: 55.7601,
+      lng: 37.6186,
       description: "На улице был мороз, а мы грелись пряным капучино и говорили обо всём на свете. Твой смех заставляет забыть о любых проблемах.",
       imageUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1200&q=80",
       likes: 7,
@@ -45,7 +49,9 @@
       title: "Наше первое совместное путешествие",
       date: "2025-05-18",
       category: "Путешествия",
-      location: "Поездка на выходные",
+      location: "Поездка к морю • Сочи",
+      lat: 43.5855,
+      lng: 39.7231,
       description: "Дорога, музыка, закат и ты рядом. Сколько бы городов мы ни посетили, главное место на земле — там, где мы держимся за руки.",
       imageUrl: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80",
       likes: 19,
@@ -57,7 +63,9 @@
       title: "Пикник на закате",
       date: "2025-07-24",
       category: "Уютные дни",
-      location: "Парк у воды",
+      location: "Марсово поле • Санкт-Петербург",
+      lat: 59.9343,
+      lng: 30.3351,
       description: "Клубника, мягкий плед и бесконечные разговоры под заходящее солнце. Самые простые моменты рядом с тобой становятся бесценными.",
       imageUrl: "https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?auto=format&fit=crop&w=1200&q=80",
       likes: 9,
@@ -69,7 +77,9 @@
       title: "Когда мы просто дурачились",
       date: "2025-09-12",
       category: "Смешные моменты",
-      location: "Дома на кухне",
+      location: "Дома на кухне • Москва",
+      lat: 55.7512,
+      lng: 37.6184,
       description: "Пытались приготовить ужин по новому рецепту, в итоге испачкались мукой и хохотали до слез. Обожаю твою непосредственность!",
       imageUrl: "https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=1200&q=80",
       likes: 15,
@@ -722,7 +732,346 @@
     `;
   }
 
-  // --- 8. MAIN APP CONTROLLER ---
+  // --- 8. EXIF METADATA & REVERSE GEOCODING ENGINE ---
+  class ExifGeoEngine {
+    constructor() {
+      this.geoCache = new Map();
+    }
+    async extractMetadata(file) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const view = new DataView(buffer);
+        if (view.getUint16(0) !== 0xFFD8) return { hasExif: false };
+
+        let offset = 2;
+        const length = view.byteLength;
+        while (offset < length) {
+          if (view.getUint8(offset) !== 0xFF) break;
+          const marker = view.getUint8(offset + 1);
+          if (marker === 0xE1) {
+            const exifHeader = view.getUint32(offset + 4);
+            if (exifHeader === 0x45786966) {
+              const tiffOffset = offset + 10;
+              return this.parseTiff(view, tiffOffset);
+            }
+          }
+          const markerLength = view.getUint16(offset + 2);
+          offset += 2 + markerLength;
+        }
+        return { hasExif: false };
+      } catch (err) {
+        return { hasExif: false };
+      }
+    }
+    parseTiff(view, tiffOffset) {
+      const endianness = view.getUint16(tiffOffset);
+      const isLittleEndian = endianness === 0x4949;
+      if (view.getUint16(tiffOffset + 2, isLittleEndian) !== 0x002A) return { hasExif: false };
+
+      const firstIFDOffset = view.getUint32(tiffOffset + 4, isLittleEndian);
+      const ifd0 = tiffOffset + firstIFDOffset;
+      let subExifOffset = null, gpsIFDOffset = null;
+      const numEntries = view.getUint16(ifd0, isLittleEndian);
+      for (let i = 0; i < numEntries; i++) {
+        const entryOffset = ifd0 + 2 + i * 12;
+        const tag = view.getUint16(entryOffset, isLittleEndian);
+        const val = view.getUint32(entryOffset + 8, isLittleEndian);
+        if (tag === 0x8769) subExifOffset = tiffOffset + val;
+        else if (tag === 0x8825) gpsIFDOffset = tiffOffset + val;
+      }
+      let dateTimeOriginal = null;
+      if (subExifOffset) {
+        dateTimeOriginal = this.readStringTag(view, subExifOffset, 0x9003, isLittleEndian, tiffOffset);
+      }
+      let gpsData = null;
+      if (gpsIFDOffset) {
+        gpsData = this.readGpsData(view, gpsIFDOffset, isLittleEndian, tiffOffset);
+      }
+      let parsedDate = null;
+      if (dateTimeOriginal) {
+        const parts = dateTimeOriginal.split(' ')[0].split(':');
+        if (parts.length === 3) parsedDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
+      }
+      return { hasExif: true, originalDate: parsedDate, gps: gpsData };
+    }
+    readStringTag(view, ifdOffset, targetTag, isLittleEndian, tiffOffset) {
+      const numEntries = view.getUint16(ifdOffset, isLittleEndian);
+      for (let i = 0; i < numEntries; i++) {
+        const entry = ifdOffset + 2 + i * 12;
+        const tag = view.getUint16(entry, isLittleEndian);
+        if (tag === targetTag) {
+          const count = view.getUint32(entry + 4, isLittleEndian);
+          const offset = view.getUint32(entry + 8, isLittleEndian);
+          const strOffset = tiffOffset + offset;
+          let str = '';
+          for (let j = 0; j < count - 1; j++) str += String.fromCharCode(view.getUint8(strOffset + j));
+          return str.trim();
+        }
+      }
+      return null;
+    }
+    readGpsData(view, gpsOffset, isLittleEndian, tiffOffset) {
+      const numEntries = view.getUint16(gpsOffset, isLittleEndian);
+      let lat = null, latRef = 'N', lon = null, lonRef = 'E';
+      for (let i = 0; i < numEntries; i++) {
+        const entry = gpsOffset + 2 + i * 12;
+        const tag = view.getUint16(entry, isLittleEndian);
+        if (tag === 0x0001) latRef = String.fromCharCode(view.getUint8(entry + 8));
+        else if (tag === 0x0002) lat = this.readRationalCoordinates(view, entry, isLittleEndian, tiffOffset);
+        else if (tag === 0x0003) lonRef = String.fromCharCode(view.getUint8(entry + 8));
+        else if (tag === 0x0004) lon = this.readRationalCoordinates(view, entry, isLittleEndian, tiffOffset);
+      }
+      if (lat !== null && lon !== null) {
+        let finalLat = lat[0] + lat[1] / 60 + lat[2] / 3600;
+        let finalLon = lon[0] + lon[1] / 60 + lon[2] / 3600;
+        if (latRef === 'S') finalLat = -finalLat;
+        if (lonRef === 'W') finalLon = -finalLon;
+        return { lat: Number(finalLat.toFixed(6)), lng: Number(finalLon.toFixed(6)) };
+      }
+      return null;
+    }
+    readRationalCoordinates(view, entryOffset, isLittleEndian, tiffOffset) {
+      const offset = view.getUint32(entryOffset + 8, isLittleEndian);
+      const dataOffset = tiffOffset + offset;
+      const values = [];
+      for (let i = 0; i < 3; i++) {
+        const num = view.getUint32(dataOffset + i * 8, isLittleEndian);
+        const den = view.getUint32(dataOffset + i * 8 + 4, isLittleEndian);
+        values.push(den === 0 ? 0 : num / den);
+      }
+      return values;
+    }
+    async reverseGeocode(lat, lng) {
+      const cacheKey = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+      if (this.geoCache.has(cacheKey)) return this.geoCache.get(cacheKey);
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&accept-language=ru`;
+        const res = await fetch(url, { headers: { 'Accept-Language': 'ru' } });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data && data.address) {
+          const addr = data.address;
+          const city = addr.city || addr.town || addr.village || addr.municipality || addr.state;
+          const place = addr.road || addr.suburb || addr.tourism || '';
+          const country = addr.country || '';
+          let formatted = city ? (place ? `${city}, ${place}` : (country ? `${city}, ${country}` : city)) : (data.display_name.split(',').slice(0, 2).join(','));
+          this.geoCache.set(cacheKey, formatted);
+          return formatted;
+        }
+      } catch (e) {}
+      return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+  }
+
+  // --- 9. INTERACTIVE MEMORY MAP ENGINE (LEAFLET) ---
+  class MemoryMapEngine {
+    constructor(containerId, onMomentClick) {
+      this.containerId = containerId;
+      this.map = null;
+      this.markersGroup = null;
+      this.onMomentClick = onMomentClick;
+      this.isInitialized = false;
+    }
+    init() {
+      if (this.isInitialized || !document.getElementById(this.containerId)) return;
+      if (typeof L === 'undefined') return;
+
+      this.map = L.map(this.containerId, {
+        zoomControl: true,
+        scrollWheelZoom: true
+      }).setView([55.7558, 37.6173], 6);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(this.map);
+
+      this.markersGroup = L.layerGroup().addTo(this.map);
+      this.isInitialized = true;
+    }
+    createHeartIcon() {
+      return L.divIcon({
+        className: 'custom-map-heart-marker',
+        html: `
+          <div class="relative cursor-pointer -translate-x-1/2 -translate-y-full group">
+            <div class="w-10 h-10 rounded-full bg-white border-2 border-rose-500 shadow-lg flex items-center justify-center text-rose-500 hover:scale-110 hover:bg-rose-500 hover:text-white transition-all duration-300">
+              <i class="fa-solid fa-heart text-base animate-pulse"></i>
+            </div>
+            <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-rose-500 mx-auto -mt-[1px]"></div>
+          </div>
+        `,
+        iconSize: [40, 48],
+        iconAnchor: [20, 48],
+        popupAnchor: [0, -46]
+      });
+    }
+    renderMoments(moments) {
+      if (!this.map) this.init();
+      if (!this.map || !this.markersGroup) return;
+
+      this.markersGroup.clearLayers();
+      const momentsWithCoords = moments.filter(m => m.lat && m.lng);
+      if (momentsWithCoords.length === 0) return;
+
+      const bounds = [];
+      momentsWithCoords.forEach(moment => {
+        const latLng = [moment.lat, moment.lng];
+        bounds.push(latLng);
+        const marker = L.marker(latLng, { icon: this.createHeartIcon() });
+        const popupHtml = `
+          <div class="p-2 max-w-[220px] font-sans">
+            <div class="rounded-xl overflow-hidden aspect-[16/10] bg-rose-50 mb-2 relative">
+              <img src="${moment.imageUrl}" alt="${moment.title}" class="w-full h-full object-cover" />
+              <span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-rose-600 backdrop-blur-sm">
+                ${moment.category || 'Момент'}
+              </span>
+            </div>
+            <h4 class="font-bold text-zinc-800 text-sm leading-tight mb-1 font-serif-romantic">${moment.title}</h4>
+            <p class="text-[11px] text-zinc-500 mb-2">${moment.date} ${moment.location ? '• ' + moment.location : ''}</p>
+            <button class="map-popup-view-btn w-full py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-sm transition-colors" data-id="${moment.id}">
+              Открыть воспоминание
+            </button>
+          </div>
+        `;
+        marker.bindPopup(popupHtml, { className: 'custom-map-popup', closeButton: false, maxWidth: 240 });
+        marker.on('popupopen', () => {
+          const btn = document.querySelector(`.map-popup-view-btn[data-id="${moment.id}"]`);
+          if (btn) btn.onclick = () => { if (this.onMomentClick) this.onMomentClick(moment); };
+        });
+        this.markersGroup.addLayer(marker);
+      });
+      if (bounds.length > 0) {
+        this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      }
+    }
+    invalidateSize() {
+      if (this.map) setTimeout(() => this.map.invalidateSize(), 200);
+    }
+  }
+
+  // --- 10. PHOTOBOOK SPREADS COMPILER ---
+  class PhotobookGenerator {
+    generateSpreads(moments, config = {}) {
+      const startDate = config.startDate || '2024-12-21';
+      const sorted = [...moments].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const spreads = [
+        this.renderCoverSpread(startDate, sorted.length),
+        this.renderDedicationSpread(config.quote),
+        ...this.renderMomentSpreads(sorted),
+        this.renderBackCoverSpread()
+      ];
+      return spreads.join('');
+    }
+    renderCoverSpread(startDate, totalMoments) {
+      return `
+        <div class="photobook-page flex flex-col items-center justify-between p-12 text-center bg-[#FAF4F0] border-4 border-[#E8DCD5] rounded-xl shadow-lg relative min-h-[480px]">
+          <div class="absolute inset-4 border border-[#D5C2B8] pointer-events-none"></div>
+          <div class="mt-4">
+            <span class="text-xs uppercase tracking-[0.3em] text-[#9A7B70] font-semibold">Архив воспоминаний</span>
+            <div class="w-12 h-0.5 bg-[#C9A99D] mx-auto mt-2"></div>
+          </div>
+          <div class="my-auto py-6">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-tr from-rose-500 to-pink-400 flex items-center justify-center text-white shadow-xl">
+              <i class="fa-solid fa-heart text-2xl"></i>
+            </div>
+            <h1 class="text-4xl sm:text-5xl font-serif-romantic font-bold text-[#3E302B] mb-2">Наша История</h1>
+            <p class="text-sm font-serif-romantic text-[#7D645B] italic">Том I • с 21 декабря 2024 года</p>
+          </div>
+          <div class="mb-4">
+            <p class="text-xs text-[#9A7B70] tracking-widest font-medium uppercase">Коллекция из ${totalMoments} памятных моментов</p>
+          </div>
+        </div>
+      `;
+    }
+    renderDedicationSpread(quote) {
+      return `
+        <div class="photobook-page grid grid-cols-1 sm:grid-cols-2 gap-8 p-10 bg-white border border-rose-100 rounded-xl shadow-md min-h-[480px]">
+          <div class="flex flex-col items-center justify-center p-6 border-r border-rose-50 text-center">
+            <div class="w-24 h-24 rounded-full border border-rose-200 p-2 mb-4">
+              <div class="w-full h-full rounded-full bg-rose-50 flex items-center justify-center text-rose-400">
+                <i class="fa-solid fa-infinity text-2xl"></i>
+              </div>
+            </div>
+            <h3 class="font-serif-romantic text-2xl font-bold text-zinc-800 mb-1">21.12.2024</h3>
+            <p class="text-xs text-zinc-400 uppercase tracking-widest">День, когда всё началось</p>
+          </div>
+          <div class="flex flex-col justify-center p-6 text-center sm:text-left">
+            <span class="text-xs text-rose-500 uppercase tracking-widest font-semibold mb-3">Посвящение</span>
+            <p class="font-handwriting text-3xl text-zinc-700 leading-relaxed mb-4">
+              «${quote || 'В тебе есть весь мой мир, всё мое счастье и всё моё спокойствие.'}»
+            </p>
+            <div class="w-16 h-0.5 bg-rose-300 mb-3"></div>
+            <p class="text-xs text-zinc-400 leading-relaxed font-light">
+              Эта книга — наше осязаемое доказательство того, сколько тепла, смеха, путешествий и объятий мы разделили друг с другом.
+            </p>
+          </div>
+        </div>
+      `;
+    }
+    renderMomentSpreads(moments) {
+      const spreads = [];
+      for (let i = 0; i < moments.length; i += 2) {
+        const m1 = moments[i];
+        const m2 = moments[i + 1] || null;
+        spreads.push(`
+          <div class="photobook-page grid grid-cols-1 sm:grid-cols-2 gap-6 p-8 bg-white border border-rose-100 rounded-xl shadow-md min-h-[480px]">
+            <div class="flex flex-col h-full bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden">
+              <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm">
+                <img src="${m1.imageUrl}" alt="${m1.title}" class="w-full h-full object-cover" />
+              </div>
+              <div class="flex items-center justify-between text-xs text-rose-600 font-medium mb-1">
+                <span>${m1.date}</span>
+                ${m1.location ? `<span class="truncate max-w-[140px] text-zinc-500">📍 ${m1.location}</span>` : ''}
+              </div>
+              <h3 class="font-serif-romantic text-xl font-bold text-zinc-800 mb-2 leading-tight">${m1.title}</h3>
+              <p class="text-xs sm:text-sm text-zinc-600 leading-relaxed font-light line-clamp-4">${m1.description || ''}</p>
+            </div>
+            ${m2 ? `
+              <div class="flex flex-col h-full bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden">
+                <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm">
+                  <img src="${m2.imageUrl}" alt="${m2.title}" class="w-full h-full object-cover" />
+                </div>
+                <div class="flex items-center justify-between text-xs text-rose-600 font-medium mb-1">
+                  <span>${m2.date}</span>
+                  ${m2.location ? `<span class="truncate max-w-[140px] text-zinc-500">📍 ${m2.location}</span>` : ''}
+                </div>
+                <h3 class="font-serif-romantic text-xl font-bold text-zinc-800 mb-2 leading-tight">${m2.title}</h3>
+                <p class="text-xs sm:text-sm text-zinc-600 leading-relaxed font-light line-clamp-4">${m2.description || ''}</p>
+              </div>
+            ` : `
+              <div class="flex flex-col items-center justify-center p-8 text-center rounded-2xl border-2 border-dashed border-rose-200">
+                <i class="fa-solid fa-heart text-rose-300 text-3xl mb-3"></i>
+                <p class="font-serif-romantic text-lg font-bold text-zinc-700">Каждый день с тобой — это новая глава</p>
+                <p class="text-xs text-zinc-400 mt-1">Место для следующего фото...</p>
+              </div>
+            `}
+          </div>
+        `);
+      }
+      return spreads;
+    }
+    renderBackCoverSpread() {
+      return `
+        <div class="photobook-page flex flex-col items-center justify-between p-12 text-center bg-[#FAF4F0] border-4 border-[#E8DCD5] rounded-xl shadow-lg relative min-h-[480px]">
+          <div class="absolute inset-4 border border-[#D5C2B8] pointer-events-none"></div>
+          <div></div>
+          <div class="my-auto">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shadow-sm">
+              <i class="fa-solid fa-heart text-xl"></i>
+            </div>
+            <h2 class="text-3xl font-serif-romantic font-bold text-[#3E302B] mb-2">Продолжение следует...</h2>
+            <p class="font-handwriting text-2xl text-[#7D645B]">Я люблю тебя всё сильнее с каждым днем</p>
+          </div>
+          <div class="text-[11px] text-[#9A7B70] tracking-wider uppercase">
+            Напечатано специально для нас двоих • 2026
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // --- 11. MAIN APP CONTROLLER ---
   class LoveStoryApp {
     constructor() {
       this.moments = [];
@@ -735,6 +1084,9 @@
       this.petals = null;
       this.audio = new AmbientAudio();
       this.storage = new StorageManager();
+      this.exifEngine = new ExifGeoEngine();
+      this.mapEngine = new MemoryMapEngine('memory-map', (m) => this.openLightbox(m));
+      this.photobook = new PhotobookGenerator();
       this.activeLightboxMoment = null;
       this.uploadedImageBlob = null;
       this.uploadedImageDataUrl = null;
@@ -881,10 +1233,12 @@
     renderCurrentView() {
       const timelineView = document.getElementById('timeline-view');
       const galleryView = document.getElementById('gallery-view');
+      const mapView = document.getElementById('map-view');
       const filterSection = document.getElementById('filter-section');
 
       timelineView.classList.add('hidden');
       galleryView.classList.add('hidden');
+      if (mapView) mapView.classList.add('hidden');
 
       if (this.currentView === 'timeline') {
         timelineView.classList.remove('hidden');
@@ -894,7 +1248,34 @@
         galleryView.classList.remove('hidden');
         filterSection.classList.remove('hidden');
         this.renderGallery();
+      } else if (this.currentView === 'map') {
+        if (mapView) {
+          mapView.classList.remove('hidden');
+          filterSection.classList.remove('hidden');
+          this.renderMap();
+        }
       }
+    }
+
+    renderMap() {
+      const filtered = this.getFilteredMoments();
+      this.mapEngine.renderMoments(filtered);
+      this.mapEngine.invalidateSize();
+
+      // Calculate Map Statistics
+      const withCoords = filtered.filter(m => m.lat && m.lng);
+      const cities = new Set(
+        withCoords
+          .map(m => m.location ? m.location.split('•').pop().split(',')[0].trim() : '')
+          .filter(Boolean)
+      );
+
+      const elPlaces = document.getElementById('map-stats-places');
+      const elCities = document.getElementById('map-stats-cities');
+      const elPhotos = document.getElementById('map-stats-photos');
+      if (elPlaces) elPlaces.innerText = withCoords.length;
+      if (elCities) elCities.innerText = cities.size || (withCoords.length > 0 ? 1 : 0);
+      if (elPhotos) elPhotos.innerText = withCoords.length;
     }
 
     renderTimeline() {
@@ -1161,6 +1542,44 @@
           }
         }
       };
+
+      // Photobook Modal Controls
+      const photobookModal = document.getElementById('photobook-modal');
+      const openPhotobookBtn = document.getElementById('open-photobook-btn');
+      const closePhotobookBtn = document.getElementById('close-photobook-btn');
+      const printPhotobookBtn = document.getElementById('print-photobook-btn');
+      const photobookContainer = document.getElementById('photobook-preview-container');
+
+      if (openPhotobookBtn) {
+        openPhotobookBtn.onclick = () => {
+          const spreadsHtml = this.photobook.generateSpreads(this.moments, {
+            startDate: INITIAL_CONFIG.startDate,
+            quote: INITIAL_CONFIG.quote
+          });
+          photobookContainer.innerHTML = spreadsHtml;
+          photobookModal.classList.remove('hidden');
+          photobookModal.classList.add('flex');
+        };
+      }
+      if (closePhotobookBtn) {
+        closePhotobookBtn.onclick = () => {
+          photobookModal.classList.add('hidden');
+          photobookModal.classList.remove('flex');
+        };
+      }
+      if (printPhotobookBtn) {
+        printPhotobookBtn.onclick = () => {
+          window.print();
+        };
+      }
+      if (photobookModal) {
+        photobookModal.onclick = (e) => {
+          if (e.target.id === 'photobook-modal') {
+            photobookModal.classList.add('hidden');
+            photobookModal.classList.remove('flex');
+          }
+        };
+      }
     }
 
     async handleSelectedPhoto(file) {
@@ -1172,10 +1591,39 @@
         const dropZone = document.getElementById('moment-dropzone');
         const previewContainer = document.getElementById('preview-container');
         const imgPreview = document.getElementById('moment-img-preview');
+        const exifBadge = document.getElementById('exif-detected-badge');
+        const exifText = document.getElementById('exif-detected-text');
 
         imgPreview.src = compressed.dataUrl;
         dropZone.classList.add('hidden');
         previewContainer.classList.remove('hidden');
+
+        // Extract EXIF data (Date & GPS)
+        const exifData = await this.exifEngine.extractMetadata(file);
+        if (exifData && exifData.hasExif) {
+          const detectedMessages = [];
+
+          if (exifData.originalDate) {
+            document.getElementById('moment-date-input').value = exifData.originalDate;
+            detectedMessages.push(`Дата: ${exifData.originalDate}`);
+          }
+
+          if (exifData.gps) {
+            document.getElementById('moment-lat-input').value = exifData.gps.lat;
+            document.getElementById('moment-lng-input').value = exifData.gps.lng;
+
+            const placeName = await this.exifEngine.reverseGeocode(exifData.gps.lat, exifData.gps.lng);
+            if (placeName) {
+              document.getElementById('moment-location-input').value = placeName;
+              detectedMessages.push(`Локация: ${placeName}`);
+            }
+          }
+
+          if (detectedMessages.length > 0 && exifBadge && exifText) {
+            exifText.innerText = `Определено по снимку: ${detectedMessages.join(' • ')}`;
+            exifBadge.classList.remove('hidden');
+          }
+        }
       } catch (err) {
         alert('Пожалуйста, выберите файл изображения');
       }
@@ -1184,6 +1632,13 @@
     resetAddMomentForm() {
       document.getElementById('add-moment-form').reset();
       document.getElementById('moment-date-input').value = new Date().toISOString().slice(0, 10);
+      const latInp = document.getElementById('moment-lat-input');
+      const lngInp = document.getElementById('moment-lng-input');
+      const exifBadge = document.getElementById('exif-detected-badge');
+      if (latInp) latInp.value = '';
+      if (lngInp) lngInp.value = '';
+      if (exifBadge) exifBadge.classList.add('hidden');
+
       this.uploadedImageBlob = null;
       this.uploadedImageDataUrl = null;
       document.getElementById('preview-container').classList.add('hidden');
@@ -1196,6 +1651,8 @@
       const category = document.getElementById('moment-category-input').value;
       const location = document.getElementById('moment-location-input').value.trim();
       const description = document.getElementById('moment-desc-input').value.trim();
+      const latVal = document.getElementById('moment-lat-input')?.value;
+      const lngVal = document.getElementById('moment-lng-input')?.value;
 
       if (!this.uploadedImageDataUrl) {
         alert('Пожалуйста, прикрепите фотографию момента!');
@@ -1212,6 +1669,8 @@
         date: date || new Date().toISOString().slice(0, 10),
         category: category || 'Уютные дни',
         location: location || '',
+        lat: latVal ? parseFloat(latVal) : null,
+        lng: lngVal ? parseFloat(lngVal) : null,
         description: description || '',
         imageUrl: this.uploadedImageDataUrl,
         likes: 1,

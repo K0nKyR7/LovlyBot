@@ -155,3 +155,63 @@ body {
   break-inside: avoid;
   margin-bottom: 1.25rem;
 }
+
+/* Custom Leaflet Map styling */
+.custom-map-heart-marker {
+  background: transparent;
+  border: none;
+}
+.custom-map-popup .leaflet-popup-content-wrapper {
+  border-radius: 1.25rem;
+  padding: 0.25rem;
+  box-shadow: 0 12px 30px -6px rgba(225, 29, 72, 0.2);
+  border: 1px solid rgba(254, 205, 211, 0.8);
+}
+.custom-map-popup .leaflet-popup-tip {
+  background: white;
+}
+
+/* Photobook Print Engine */
+.photobook-page {
+  page-break-after: always;
+  break-after: page;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  #lock-screen, header, #filter-section, #timeline-view, #gallery-view, #map-view,
+  #petals-canvas, #lightbox-modal, #add-moment-modal, #settings-modal,
+  #close-photobook-btn, #print-photobook-btn, .view-tab-btn, #open-add-moment-btn {
+    display: none !important;
+  }
+  #photobook-modal {
+    position: static !important;
+    display: block !important;
+    background: white !important;
+    padding: 0 !important;
+  }
+  #photobook-modal .glass-card {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+  #photobook-preview-container {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .photobook-page {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin-bottom: 0 !important;
+    min-height: 98vh;
+    page-break-inside: avoid;
+  }
+}
+

@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS public.moments (
     date DATE NOT NULL,
     category TEXT DEFAULT 'Уютные дни',
     location TEXT,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
     description TEXT,
     "imageUrl" TEXT NOT NULL,
     likes INTEGER DEFAULT 0,

@@ -1,0 +1,13 @@
+{
+  "name": "love-story-telegram-bot",
+  "version": "1.0.0",
+  "description": "Приватный семейный Telegram-бот для моментального добавления воспоминаний и фото на сайт",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "keywords": ["telegram-bot", "couple", "gallery"],
+  "author": "Love Story",
+  "license": "MIT"
+}
