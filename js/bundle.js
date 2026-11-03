@@ -610,12 +610,20 @@
       return moment;
     }
 
-    async deleteMoment(id) {
+    async deleteMoment(id, moment = null) {
       await this.deleteFromStore(STORE_MOMENTS, id);
       if (this.supabaseClient) {
         try {
           await this.supabaseClient.from('moments').delete().eq('id', id);
-        } catch (e) {}
+          if (moment && moment.imageUrl && moment.imageUrl.includes('/storage/v1/object/public/photos/')) {
+            const fileName = moment.imageUrl.split('/storage/v1/object/public/photos/').pop();
+            if (fileName) {
+              await this.supabaseClient.storage.from('photos').remove([fileName]);
+            }
+          }
+        } catch (e) {
+          console.warn('Supabase delete error:', e);
+        }
       }
     }
 
@@ -1329,7 +1337,8 @@
           e.stopPropagation();
           if (confirm('Точно удалить это воспоминание?')) {
             const id = btn.getAttribute('data-id');
-            await this.storage.deleteMoment(id);
+            const momentToDelete = this.moments.find(m => m.id === id);
+            await this.storage.deleteMoment(id, momentToDelete);
             this.moments = await this.storage.getMoments();
             this.renderCurrentView();
           }
