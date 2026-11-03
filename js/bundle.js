@@ -12,7 +12,9 @@
     coupleNames: "Мы вместе",
     partnerName: "Моя любимая",
     defaultPin: "2112", // 21 декабря (21.12)
-    quote: "В тебе есть весь мой мир, всё мое счастье и всё моё спокойствие."
+    quote: "В тебе есть весь мой мир, всё мое счастье и всё моё спокойствие.",
+    defaultSupabaseUrl: "https://bjujgmewkjwuxjnrnedi.supabase.co",
+    defaultSupabaseKey: "sb_publishable_NNfGb2ZF6DfyXmo2H8iOSQ_Qw9CXW0-"
   };
 
   const INITIAL_MOMENTS = [
@@ -517,8 +519,8 @@
     }
 
     async initSupabaseIfConfigured() {
-      const supabaseUrl = await this.getSetting('supabase_url');
-      const supabaseKey = await this.getSetting('supabase_key');
+      let supabaseUrl = await this.getSetting('supabase_url') || INITIAL_CONFIG.defaultSupabaseUrl;
+      let supabaseKey = await this.getSetting('supabase_key') || INITIAL_CONFIG.defaultSupabaseKey;
       if (supabaseUrl && supabaseKey && window.supabase) {
         try {
           this.supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -1691,8 +1693,8 @@
     async populateSettingsForm() {
       const pin = await this.storage.getSetting('pin') || INITIAL_CONFIG.defaultPin;
       const startDate = await this.storage.getSetting('start_date') || INITIAL_CONFIG.startDate;
-      const supabaseUrl = await this.storage.getSetting('supabase_url') || '';
-      const supabaseKey = await this.storage.getSetting('supabase_key') || '';
+      const supabaseUrl = await this.storage.getSetting('supabase_url') || INITIAL_CONFIG.defaultSupabaseUrl || '';
+      const supabaseKey = await this.storage.getSetting('supabase_key') || INITIAL_CONFIG.defaultSupabaseKey || '';
 
       document.getElementById('settings-pin-input').value = pin;
       document.getElementById('settings-date-input').value = startDate.slice(0, 10);
