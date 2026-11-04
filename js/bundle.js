@@ -662,6 +662,59 @@
   function renderTimelineCard(moment) {
     const isLiked = moment.isLiked;
     const likesCount = moment.likes || 0;
+    const isCapsule = moment.isCapsule && moment.unlockDate;
+    const isLocked = isCapsule && (new Date(moment.unlockDate) > new Date());
+    const isAudio = (moment.imageUrl && (moment.imageUrl.endsWith('.ogg') || moment.imageUrl.endsWith('.mp3'))) || (moment.title && moment.title.startsWith('🎤'));
+
+    let mediaContent = '';
+    if (isLocked) {
+      mediaContent = `
+        <div class="relative overflow-hidden aspect-[16/10] sm:aspect-[16/9] bg-gradient-to-tr from-rose-950 via-rose-900 to-pink-900 flex flex-col items-center justify-center p-6 text-center select-none">
+          <div class="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-3 shadow-lg border border-white/30 animate-pulse">
+            <i class="fa-solid fa-lock text-xl text-rose-200"></i>
+          </div>
+          <span class="text-xs uppercase tracking-widest font-semibold text-rose-200 mb-1">Капсула времени</span>
+          <h4 class="text-white font-serif-romantic text-lg sm:text-xl font-bold mb-2">Откроется ${formatDateRu(moment.unlockDate)}</h4>
+          <span class="text-xs text-rose-200/90 bg-black/40 px-3.5 py-1 rounded-full backdrop-blur-sm">🔒 Запечатано до заветной даты</span>
+        </div>
+      `;
+    } else if (isAudio) {
+      mediaContent = `
+        <div class="relative overflow-hidden aspect-[16/10] sm:aspect-[16/9] bg-gradient-to-tr from-rose-500 to-pink-500 flex flex-col items-center justify-center p-6 text-white text-center">
+          <div class="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-3 shadow-lg border border-white/30 animate-pulse">
+            <i class="fa-solid fa-microphone text-2xl"></i>
+          </div>
+          <h4 class="font-serif-romantic text-xl font-bold mb-2">${escapeHtml(moment.title)}</h4>
+          <audio controls class="w-full max-w-md accent-rose-600 rounded-xl mt-2" src="${moment.imageUrl}"></audio>
+        </div>
+      `;
+    } else {
+      mediaContent = `
+        <div class="relative overflow-hidden aspect-[16/10] sm:aspect-[16/9] bg-rose-50 cursor-pointer moment-image-trigger" data-id="${moment.id}">
+          <img src="${moment.imageUrl}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 opacity-60"></div>
+          <div class="absolute top-3 left-3 flex flex-wrap gap-2">
+            <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-white/90 backdrop-blur-md text-rose-700 shadow-sm">
+              ${escapeHtml(moment.category || 'Воспоминание')}
+            </span>
+            ${moment.isCapsule ? '<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 backdrop-blur-md shadow-sm flex items-center gap-1"><i class="fa-solid fa-key text-[10px]"></i> Капсула открыта!</span>' : ''}
+          </div>
+          <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs sm:text-sm font-medium">
+            <div class="flex items-center gap-1.5 backdrop-blur-md bg-black/35 px-2.5 py-1 rounded-full">
+              <i class="fa-regular fa-calendar"></i>
+              <span>${formatDateRu(moment.date)}</span>
+            </div>
+            ${moment.location ? `
+              <div class="flex items-center gap-1 backdrop-blur-md bg-black/35 px-2.5 py-1 rounded-full">
+                <i class="fa-solid fa-location-dot text-rose-400"></i>
+                <span class="truncate max-w-[150px]">${escapeHtml(moment.location)}</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <div class="relative pl-6 sm:pl-10 pb-12 group last:pb-2" data-id="${moment.id}">
         <div class="absolute left-0 top-3 -ml-[1px] w-[2px] h-full bg-rose-200/80 group-last:h-4"></div>
@@ -669,27 +722,7 @@
           <i class="fa-solid fa-heart text-[8px] text-rose-500"></i>
         </div>
         <div class="glass-card glass-card-hover rounded-2xl overflow-hidden shadow-sm transition-all duration-300 border border-rose-100">
-          <div class="relative overflow-hidden aspect-[16/10] sm:aspect-[16/9] bg-rose-50 cursor-pointer moment-image-trigger" data-id="${moment.id}">
-            <img src="${moment.imageUrl}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
-            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 opacity-60"></div>
-            <div class="absolute top-3 left-3 flex flex-wrap gap-2">
-              <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-white/90 backdrop-blur-md text-rose-700 shadow-sm">
-                ${escapeHtml(moment.category || 'Воспоминание')}
-              </span>
-            </div>
-            <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs sm:text-sm font-medium">
-              <div class="flex items-center gap-1.5 backdrop-blur-md bg-black/35 px-2.5 py-1 rounded-full">
-                <i class="fa-regular fa-calendar"></i>
-                <span>${formatDateRu(moment.date)}</span>
-              </div>
-              ${moment.location ? `
-                <div class="flex items-center gap-1 backdrop-blur-md bg-black/35 px-2.5 py-1 rounded-full">
-                  <i class="fa-solid fa-location-dot text-rose-400"></i>
-                  <span class="truncate max-w-[150px]">${escapeHtml(moment.location)}</span>
-                </div>
-              ` : ''}
-            </div>
-          </div>
+          ${mediaContent}
           <div class="p-5">
             <div class="flex items-start justify-between gap-3 mb-2">
               <h3 class="text-xl sm:text-2xl font-serif-romantic font-bold text-zinc-800 leading-tight">
@@ -706,7 +739,7 @@
               </div>
             </div>
             <p class="text-zinc-600 text-sm sm:text-base leading-relaxed whitespace-pre-line font-light">
-              ${escapeHtml(moment.description || '')}
+              ${isLocked ? '<i>🔒 Содержимое спрятано в капсуле времени до заветного дня...</i>' : escapeHtml(moment.description || '')}
             </p>
           </div>
         </div>
@@ -716,6 +749,22 @@
 
   function renderGalleryCard(moment) {
     const isLiked = moment.isLiked;
+    const isCapsule = moment.isCapsule && moment.unlockDate;
+    const isLocked = isCapsule && (new Date(moment.unlockDate) > new Date());
+
+    if (isLocked) {
+      return `
+        <div class="masonry-item relative group rounded-2xl overflow-hidden shadow-sm glass-card border border-rose-200 bg-gradient-to-tr from-rose-950 to-pink-900 p-6 flex flex-col items-center justify-center text-center text-white min-h-[200px]" data-id="${moment.id}">
+          <div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center mb-2 animate-pulse">
+            <i class="fa-solid fa-lock text-rose-300"></i>
+          </div>
+          <span class="text-[10px] tracking-widest uppercase text-rose-200 font-semibold mb-1">Капсула времени</span>
+          <h4 class="font-serif-romantic text-base font-bold">${escapeHtml(moment.title)}</h4>
+          <p class="text-xs text-rose-200/80 mt-1">Откроется ${formatDateRu(moment.unlockDate)}</p>
+        </div>
+      `;
+    }
+
     return `
       <div class="masonry-item relative group rounded-2xl overflow-hidden shadow-sm glass-card border border-rose-100 cursor-pointer moment-image-trigger" data-id="${moment.id}">
         <img src="${moment.imageUrl}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -1104,39 +1153,57 @@
     }
     renderMomentSpreads(moments) {
       const spreads = [];
+      let pageNum = 1;
       for (let i = 0; i < moments.length; i += 2) {
         const m1 = moments[i];
         const m2 = moments[i + 1] || null;
+        const leftPageNum = pageNum++;
+        const rightPageNum = pageNum++;
         spreads.push(`
-          <div class="photobook-page grid grid-cols-1 sm:grid-cols-2 gap-6 p-8 bg-white border border-rose-100 rounded-xl shadow-md min-h-[480px]">
-            <div class="flex flex-col h-full bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden">
-              <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm">
-                <img src="${m1.imageUrl}" alt="${m1.title}" class="w-full h-full object-cover" />
-              </div>
-              <div class="flex items-center justify-between text-xs text-rose-600 font-medium mb-1">
-                <span>${m1.date}</span>
-                ${m1.location ? `<span class="truncate max-w-[140px] text-zinc-500">📍 ${m1.location}</span>` : ''}
-              </div>
-              <h3 class="font-serif-romantic text-xl font-bold text-zinc-800 mb-2 leading-tight">${m1.title}</h3>
-              <p class="text-xs sm:text-sm text-zinc-600 leading-relaxed font-light line-clamp-4">${m1.description || ''}</p>
-            </div>
-            ${m2 ? `
-              <div class="flex flex-col h-full bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden">
-                <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm">
-                  <img src="${m2.imageUrl}" alt="${m2.title}" class="w-full h-full object-cover" />
+          <div class="photobook-page grid grid-cols-1 sm:grid-cols-2 gap-6 p-8 bg-white border border-rose-100 rounded-xl shadow-md min-h-[480px] relative">
+            <div class="flex flex-col h-full justify-between bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden relative">
+              <div>
+                <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm relative group">
+                  <img src="${m1.imageUrl}" alt="${escapeHtml(m1.title)}" class="w-full h-full object-cover" />
+                  <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-rose-600 backdrop-blur-sm shadow-xs">${escapeHtml(m1.category || 'Воспоминание')}</span>
                 </div>
                 <div class="flex items-center justify-between text-xs text-rose-600 font-medium mb-1">
-                  <span>${m2.date}</span>
-                  ${m2.location ? `<span class="truncate max-w-[140px] text-zinc-500">📍 ${m2.location}</span>` : ''}
+                  <span>${formatDateRu(m1.date)}</span>
+                  ${m1.location ? `<span class="truncate max-w-[140px] text-zinc-500">📍 ${escapeHtml(m1.location)}</span>` : ''}
                 </div>
-                <h3 class="font-serif-romantic text-xl font-bold text-zinc-800 mb-2 leading-tight">${m2.title}</h3>
-                <p class="text-xs sm:text-sm text-zinc-600 leading-relaxed font-light line-clamp-4">${m2.description || ''}</p>
+                <h3 class="font-serif-romantic text-xl font-bold text-zinc-800 mb-2 leading-tight">${escapeHtml(m1.title)}</h3>
+                <p class="text-xs sm:text-sm text-zinc-600 leading-relaxed font-light line-clamp-4">${escapeHtml(m1.description || '')}</p>
+              </div>
+              <div class="pt-3 border-t border-rose-100/50 flex justify-between items-center text-[10px] text-zinc-400 font-serif-romantic">
+                <span>Наша История</span>
+                <span>— ${leftPageNum} —</span>
+              </div>
+            </div>
+            ${m2 ? `
+              <div class="flex flex-col h-full justify-between bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden relative">
+                <div>
+                  <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm relative group">
+                    <img src="${m2.imageUrl}" alt="${escapeHtml(m2.title)}" class="w-full h-full object-cover" />
+                    <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-rose-600 backdrop-blur-sm shadow-xs">${escapeHtml(m2.category || 'Воспоминание')}</span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs text-rose-600 font-medium mb-1">
+                    <span>${formatDateRu(m2.date)}</span>
+                    ${m2.location ? `<span class="truncate max-w-[140px] text-zinc-500">📍 ${escapeHtml(m2.location)}</span>` : ''}
+                  </div>
+                  <h3 class="font-serif-romantic text-xl font-bold text-zinc-800 mb-2 leading-tight">${escapeHtml(m2.title)}</h3>
+                  <p class="text-xs sm:text-sm text-zinc-600 leading-relaxed font-light line-clamp-4">${escapeHtml(m2.description || '')}</p>
+                </div>
+                <div class="pt-3 border-t border-rose-100/50 flex justify-between items-center text-[10px] text-zinc-400 font-serif-romantic">
+                  <span>— ${rightPageNum} —</span>
+                  <span>Семейный архив</span>
+                </div>
               </div>
             ` : `
               <div class="flex flex-col items-center justify-center p-8 text-center rounded-2xl border-2 border-dashed border-rose-200">
-                <i class="fa-solid fa-heart text-rose-300 text-3xl mb-3"></i>
+                <i class="fa-solid fa-heart text-rose-300 text-3xl mb-3 animate-pulse"></i>
                 <p class="font-serif-romantic text-lg font-bold text-zinc-700">Каждый день с тобой — это новая глава</p>
-                <p class="text-xs text-zinc-400 mt-1">Место для следующего фото...</p>
+                <p class="text-xs text-zinc-400 mt-1">Место для следующего совместного фото...</p>
+                <span class="text-[10px] text-zinc-300 mt-6 font-serif-romantic">— ${rightPageNum} —</span>
               </div>
             `}
           </div>
@@ -1164,7 +1231,332 @@
     }
   }
 
-  // --- 11. MAIN APP CONTROLLER ---
+  // --- 11. DATE IDEAS & BUCKET LIST ENGINE ---
+  const DATE_IDEAS = [
+    {
+      id: 'date-1',
+      category: 'cozy',
+      title: 'Форт из пледов и подушек',
+      vibe: '✨ Уютно и тепло',
+      badge: 'Дома',
+      icon: 'fa-campground',
+      recommendedCategory: 'Уютные дни',
+      description: 'Построить посреди комнаты настоящий детский форт из всех пледов и стульев, зажечь гирлянды, взять попкорн и смотреть любимый фильм.'
+    },
+    {
+      id: 'date-2',
+      category: 'cozy',
+      title: 'Кулинарный баттл: домашняя паста',
+      vibe: '🍝 Вкусно и весело',
+      badge: 'Дома',
+      icon: 'fa-utensils',
+      recommendedCategory: 'Уютные дни',
+      description: 'Включить итальянский джаз, открыть бутылку вина или сидра и с нуля приготовить домашнюю пасту или пиццу с любимыми топпингами.'
+    },
+    {
+      id: 'date-3',
+      category: 'cozy',
+      title: 'Вечер при свечах без гаджетов',
+      vibe: '🕯️ Душевный разговор',
+      badge: 'Дома',
+      icon: 'fa-fire-flame-curved',
+      recommendedCategory: 'Свидания',
+      description: 'Отложить все смартфоны на вечер в коробку, зажечь свечи и задать друг другу 36 вопросов, чтобы влюбиться заново.'
+    },
+    {
+      id: 'date-4',
+      category: 'cozy',
+      title: 'Домашний SPA-салон для двоих',
+      vibe: '🫧 Расслабление',
+      badge: 'Дома',
+      icon: 'fa-spa',
+      recommendedCategory: 'Уютные дни',
+      description: 'Тёплая ванна с пеной и морской солью, массаж с ароматическими маслами и расслабляющий плейлист.'
+    },
+    {
+      id: 'date-5',
+      category: 'cozy',
+      title: 'Вечер настольных игр и какао',
+      vibe: '🎲 Азарт и смех',
+      badge: 'Дома',
+      icon: 'fa-dice',
+      recommendedCategory: 'Смешные моменты',
+      description: 'Сварить горячее какао с маршмеллоу и устроить турнир в любимые настолки, карты или видеоигры на приставке.'
+    },
+    {
+      id: 'date-6',
+      category: 'cozy',
+      title: 'Рисование портретов друг друга вслепую',
+      vibe: '🎨 Смех до слёз',
+      badge: 'Дома',
+      icon: 'fa-palette',
+      recommendedCategory: 'Смешные моменты',
+      description: 'Взять краски или маркеры и за 5 минут нарисовать портрет партнёра, не отрывая руки от бумаги. Результат оформить в рамочку!'
+    },
+    {
+      id: 'date-7',
+      category: 'city',
+      title: 'Спонтанная фотосессия на плёнку',
+      vibe: '📸 Плёночная эстетика',
+      badge: 'В городе',
+      icon: 'fa-camera-retro',
+      recommendedCategory: 'Свидания',
+      description: 'Купить одноразовый плёночный фотоаппарат и пойти гулять по городу, снимая искренние улыбки и забавные моменты.'
+    },
+    {
+      id: 'date-8',
+      category: 'city',
+      title: 'Тайный кофе-спот и десерты',
+      vibe: '☕ Сладкоежки',
+      badge: 'В городе',
+      icon: 'fa-mug-hot',
+      recommendedCategory: 'Свидания',
+      description: 'Найти в городе кофейню, где вы ещё никогда не были, заказать самый необычный десерт и делиться впечатлениями.'
+    },
+    {
+      id: 'date-9',
+      category: 'city',
+      title: 'Свидание в книжном магазине',
+      vibe: '📖 Романтика страниц',
+      badge: 'В городе',
+      icon: 'fa-book-bookmark',
+      recommendedCategory: 'Свидания',
+      description: 'Пойти в большой книжный, разделиться на 15 минут и выбрать друг для друга по одной книге, которая напоминает о партнере.'
+    },
+    {
+      id: 'date-10',
+      category: 'city',
+      title: 'Ночная прогулка по безлюдному городу',
+      vibe: '🌙 Магия ночи',
+      badge: 'В городе',
+      icon: 'fa-moon',
+      recommendedCategory: 'Свидания',
+      description: 'Выйти гулять после полуночи, когда город засыпает, держаться за руки под фонарями и слушать эхо своих шагов.'
+    },
+    {
+      id: 'date-11',
+      category: 'city',
+      title: 'Тайные подарки на 500 рублей',
+      vibe: '🎁 Сюрприз',
+      badge: 'В городе',
+      icon: 'fa-gift',
+      recommendedCategory: 'Смешные моменты',
+      description: 'Зайти в винтажную лавку или маркет с бюджетом ровно 500 рублей, купить друг другу тайный подарок и распаковать в парке.'
+    },
+    {
+      id: 'date-12',
+      category: 'city',
+      title: 'Вечер в планетарии или на крыше',
+      vibe: '✨ Звёзды и огни',
+      badge: 'В городе',
+      icon: 'fa-star',
+      recommendedCategory: 'Свидания',
+      description: 'Посмотреть на звёзды или подняться на смотровую площадку города, чтобы увидеть море вечерних огней.'
+    },
+    {
+      id: 'date-13',
+      category: 'adventure',
+      title: 'Спонтанная поездка на электричке',
+      vibe: '🚂 Дорожная романтика',
+      badge: 'Приключение',
+      icon: 'fa-train',
+      recommendedCategory: 'Путешествия',
+      description: 'Приехать на вокзал, сесть на первую попавшуюся электричку в милый городок, гулять там целый день и пить чай из термоса.'
+    },
+    {
+      id: 'date-14',
+      category: 'adventure',
+      title: 'Пикник на закате с пледом и фруктами',
+      vibe: '🌅 Золотой час',
+      badge: 'Приключение',
+      icon: 'fa-sun',
+      recommendedCategory: 'Путешествия',
+      description: 'Взять с собой любимые фрукты, сыр, плед и встретить закат на берегу реки, озера или живописной поляны.'
+    },
+    {
+      id: 'date-15',
+      category: 'adventure',
+      title: 'Мастер-класс по гончарному делу',
+      vibe: '🏺 Для двоих',
+      badge: 'Приключение',
+      icon: 'fa-hands',
+      recommendedCategory: 'Свидания',
+      description: 'Вместе испачкать руки в глине за гончарным кругом и слепить кружки или тарелочки для ваших совместных завтраков.'
+    },
+    {
+      id: 'date-16',
+      category: 'adventure',
+      title: 'Ночной пикник на капоте машины',
+      vibe: '🚗 Музыка и звёзды',
+      badge: 'Приключение',
+      icon: 'fa-car',
+      recommendedCategory: 'Свидания',
+      description: 'Выехать за город подальше от огней, включить любимую музыку через колонки и смотреть на ночное небо.'
+    },
+    {
+      id: 'date-17',
+      category: 'adventure',
+      title: 'Встретить рассвет вдвоём',
+      vibe: '☕ Начало нового дня',
+      badge: 'Приключение',
+      icon: 'fa-mountain-sun',
+      recommendedCategory: 'Памятные даты',
+      description: 'Проснуться в 4 утра, налить горячий кофе в термос и первыми встретить первые лучи солнца над спящим городом.'
+    },
+    {
+      id: 'date-18',
+      category: 'soul',
+      title: 'Письмо в будущее на 5 лет вперёд',
+      vibe: '✉️ Капсула любви',
+      badge: 'Для души',
+      icon: 'fa-envelope-open-text',
+      recommendedCategory: 'Памятные даты',
+      description: 'Написать друг другу искренние письма о том, какими вы видите себя через 5 лет, запечатать в конверт и спрятать.'
+    },
+    {
+      id: 'date-19',
+      category: 'soul',
+      title: 'Плейлист наших воспоминаний',
+      vibe: '🎧 Музыка сердец',
+      badge: 'Для души',
+      icon: 'fa-headphones',
+      recommendedCategory: 'Уютные дни',
+      description: 'Собрать общий плейлист из треков, под которые вы познакомились, впервые поцеловались или гуляли прошлым летом.'
+    },
+    {
+      id: 'date-20',
+      category: 'soul',
+      title: 'Вечер благодарности и воспоминаний',
+      vibe: '💖 Тёплые слова',
+      badge: 'Для души',
+      icon: 'fa-heart',
+      recommendedCategory: 'Памятные даты',
+      description: 'По очереди сказать друг другу по 5 вещей, за которые вы больше всего благодарны в ваших отношениях.'
+    }
+  ];
+
+  class DateIdeasEngine {
+    constructor(storage, onIdeaSelect) {
+      this.storage = storage;
+      this.onIdeaSelect = onIdeaSelect;
+      this.completedIds = new Set();
+      this.currentCategory = 'all';
+    }
+
+    async init() {
+      const saved = await this.storage.getSetting('completed_date_ids');
+      if (saved && Array.isArray(saved)) {
+        this.completedIds = new Set(saved);
+      }
+      this.render();
+    }
+
+    async toggle(id) {
+      if (this.completedIds.has(id)) {
+        this.completedIds.delete(id);
+      } else {
+        this.completedIds.add(id);
+      }
+      await this.storage.saveSetting('completed_date_ids', Array.from(this.completedIds));
+      this.render();
+    }
+
+    render(category = this.currentCategory) {
+      this.currentCategory = category;
+      const container = document.getElementById('date-ideas-list');
+      if (!container) return;
+
+      const filtered = category === 'all' 
+        ? DATE_IDEAS 
+        : DATE_IDEAS.filter(d => d.category === category);
+
+      container.innerHTML = filtered.map(d => {
+        const isDone = this.completedIds.has(d.id);
+        return `
+          <div class="date-idea-card p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 ${
+            isDone 
+              ? 'bg-emerald-50/50 border-emerald-200 opacity-80' 
+              : 'bg-white border-rose-100 hover:border-rose-300 shadow-sm'
+          }">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-3 flex-1">
+                <button class="toggle-date-done-btn w-6 h-6 mt-0.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                  isDone 
+                    ? 'border-emerald-500 bg-emerald-500 text-white' 
+                    : 'border-zinc-300 hover:border-rose-400 bg-white'
+                }" data-id="${d.id}" title="${isDone ? 'Отметить как несделанное' : 'Отметить как выполненное'}">
+                  ${isDone ? '<i class="fa-solid fa-check text-xs"></i>' : ''}
+                </button>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 flex-wrap mb-1">
+                    <span class="text-xs px-2 py-0.5 rounded-md font-medium ${
+                      isDone ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-50 text-rose-600'
+                    }">${escapeHtml(d.vibe)}</span>
+                    <span class="text-[10px] text-zinc-400 font-medium">${escapeHtml(d.badge)}</span>
+                  </div>
+                  <h4 class="text-sm sm:text-base font-bold text-zinc-800 leading-tight ${isDone ? 'line-through text-zinc-500' : ''}">
+                    ${escapeHtml(d.title)}
+                  </h4>
+                  <p class="text-xs text-zinc-600 mt-1 leading-relaxed font-light">
+                    ${escapeHtml(d.description)}
+                  </p>
+                </div>
+              </div>
+              <button 
+                class="start-moment-from-idea-btn px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold shrink-0 flex items-center gap-1 transition-colors"
+                data-id="${d.id}"
+                title="Добавить фото с этого свидания в ленту"
+              >
+                <i class="fa-solid fa-camera text-[10px]"></i>
+                <span class="hidden sm:inline">Сделать фото</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.toggle-date-done-btn').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.getAttribute('data-id');
+          this.toggle(id);
+        };
+      });
+
+      container.querySelectorAll('.start-moment-from-idea-btn').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.getAttribute('data-id');
+          const idea = DATE_IDEAS.find(i => i.id === id);
+          if (idea && this.onIdeaSelect) {
+            this.onIdeaSelect(idea);
+          }
+        };
+      });
+    }
+
+    rollRandom() {
+      const candidates = DATE_IDEAS.filter(d => !this.completedIds.has(d.id));
+      const pool = candidates.length > 0 ? candidates : DATE_IDEAS;
+      const display = document.getElementById('random-idea-display');
+      const btn = document.getElementById('roll-random-date-btn');
+      if (!display) return;
+
+      btn.disabled = true;
+      let count = 0;
+      const interval = setInterval(() => {
+        const rand = pool[Math.floor(Math.random() * pool.length)];
+        display.innerText = `${rand.vibe}: ${rand.title}! 💖`;
+        count++;
+        if (count > 10) {
+          clearInterval(interval);
+          btn.disabled = false;
+          const chosen = pool[Math.floor(Math.random() * pool.length)];
+          display.innerHTML = `✨ <b>${escapeHtml(chosen.title)}</b><br><span class="text-xs font-normal text-zinc-600">${escapeHtml(chosen.description)}</span>`;
+        }
+      }, 70);
+    }
+  }
+
+  // --- 12. MAIN APP CONTROLLER ---
   class LoveStoryApp {
     constructor() {
       this.moments = [];
@@ -1180,6 +1572,7 @@
       this.exifEngine = new ExifGeoEngine();
       this.mapEngine = new MemoryMapEngine('memory-map', (m) => this.openLightbox(m));
       this.photobook = new PhotobookGenerator();
+      this.dateIdeas = new DateIdeasEngine(this.storage, (idea) => this.startMomentFromIdea(idea));
       this.activeLightboxMoment = null;
       this.uploadedImageBlob = null;
       this.uploadedImageDataUrl = null;
@@ -1187,6 +1580,7 @@
 
     async init() {
       await this.storage.init();
+      await this.dateIdeas.init();
       const savedPin = await this.storage.getSetting('pin');
       this.correctPin = savedPin || INITIAL_CONFIG.defaultPin;
 
@@ -1287,6 +1681,28 @@
 
       mainContent.classList.remove('hidden');
       await this.loadAndRenderAll();
+    }
+
+    startMomentFromIdea(idea) {
+      const datesModal = document.getElementById('dates-modal');
+      if (datesModal) {
+        datesModal.classList.add('hidden');
+        datesModal.classList.remove('flex');
+      }
+      this.resetAddMomentForm();
+      const titleInput = document.getElementById('moment-title-input');
+      const descInput = document.getElementById('moment-desc-input');
+      const catInput = document.getElementById('moment-category-input');
+      if (titleInput) titleInput.value = idea.title;
+      if (descInput) descInput.value = `${idea.vibe}\n${idea.description}`;
+      if (catInput && idea.recommendedCategory) {
+        catInput.value = idea.recommendedCategory;
+      }
+      const addMomentModal = document.getElementById('add-moment-modal');
+      if (addMomentModal) {
+        addMomentModal.classList.remove('hidden');
+        addMomentModal.classList.add('flex');
+      }
     }
 
     async loadAndRenderAll() {
@@ -1737,6 +2153,59 @@
           }
         };
       }
+
+      // Date Ideas & Bucket List Modal Controls
+      const datesModal = document.getElementById('dates-modal');
+      const openDatesBtn = document.getElementById('open-dates-modal-btn');
+      const closeDatesBtn = document.getElementById('close-dates-btn');
+      const rollRandomBtn = document.getElementById('roll-random-date-btn');
+
+      if (openDatesBtn && datesModal) {
+        openDatesBtn.onclick = () => {
+          datesModal.classList.remove('hidden');
+          datesModal.classList.add('flex');
+          this.dateIdeas.render();
+        };
+      }
+      if (closeDatesBtn && datesModal) {
+        closeDatesBtn.onclick = () => {
+          datesModal.classList.add('hidden');
+          datesModal.classList.remove('flex');
+        };
+      }
+      if (datesModal) {
+        datesModal.onclick = (e) => {
+          if (e.target.id === 'dates-modal') {
+            datesModal.classList.add('hidden');
+            datesModal.classList.remove('flex');
+          }
+        };
+      }
+      if (rollRandomBtn) {
+        rollRandomBtn.onclick = () => this.dateIdeas.rollRandom();
+      }
+
+      document.querySelectorAll('.date-filter-tab').forEach(tab => {
+        tab.onclick = () => {
+          document.querySelectorAll('.date-filter-tab').forEach(t => {
+            t.classList.remove('active', 'bg-rose-500', 'text-white', 'shadow-sm');
+            t.classList.add('bg-white', 'text-zinc-600', 'border', 'border-rose-100');
+          });
+          tab.classList.add('active', 'bg-rose-500', 'text-white', 'shadow-sm');
+          tab.classList.remove('bg-white', 'text-zinc-600', 'border', 'border-rose-100');
+          const cat = tab.getAttribute('data-cat');
+          this.dateIdeas.render(cat);
+        };
+      });
+
+      // Time Capsule form toggle
+      const capsuleCheckbox = document.getElementById('moment-is-capsule');
+      const capsuleContainer = document.getElementById('capsule-date-container');
+      if (capsuleCheckbox && capsuleContainer) {
+        capsuleCheckbox.onchange = () => {
+          capsuleContainer.classList.toggle('hidden', !capsuleCheckbox.checked);
+        };
+      }
     }
 
     async handleSelectedPhoto(file) {
@@ -1796,6 +2265,17 @@
       if (lngInp) lngInp.value = '';
       if (exifBadge) exifBadge.classList.add('hidden');
 
+      const capsuleCheck = document.getElementById('moment-is-capsule');
+      const capsuleBox = document.getElementById('capsule-date-container');
+      const unlockDateInput = document.getElementById('moment-unlock-date-input');
+      if (capsuleCheck) capsuleCheck.checked = false;
+      if (capsuleBox) capsuleBox.classList.add('hidden');
+      if (unlockDateInput) {
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        unlockDateInput.value = nextYear.toISOString().slice(0, 10);
+      }
+
       this.uploadedImageBlob = null;
       this.uploadedImageDataUrl = null;
       document.getElementById('preview-container').classList.add('hidden');
@@ -1810,6 +2290,8 @@
       const description = document.getElementById('moment-desc-input').value.trim();
       const latVal = document.getElementById('moment-lat-input')?.value;
       const lngVal = document.getElementById('moment-lng-input')?.value;
+      const isCapsule = document.getElementById('moment-is-capsule')?.checked || false;
+      const unlockDate = document.getElementById('moment-unlock-date-input')?.value || null;
 
       if (!this.uploadedImageDataUrl) {
         alert('Пожалуйста, прикрепите фотографию момента!');
@@ -1832,6 +2314,8 @@
         imageUrl: this.uploadedImageDataUrl,
         likes: 1,
         isLiked: true,
+        isCapsule: isCapsule,
+        unlockDate: isCapsule ? unlockDate : null,
         createdAt: new Date().toISOString()
       };
 

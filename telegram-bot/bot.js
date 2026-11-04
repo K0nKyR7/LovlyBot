@@ -36,10 +36,40 @@ const START_DATE = new Date('2024-12-21T00:00:00');
 
 const TG_API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : '';
 
-// Хранилище временного состояния пользователей
+// Хранилища состояния
 const pendingUploads = new Map();
-const lastUserMoments = new Map(); // userId -> { momentId, title, timestamp }
-const userState = new Map();       // userId -> { state: 'AWAITING_LOCATION', momentId }
+const lastUserMoments = new Map();  // userId -> { momentId, title, timestamp }
+const userState = new Map();        // userId -> { state: 'AWAITING_LOCATION', momentId }
+const mediaGroupQueue = new Map();  // mediaGroupId -> { timer, items: [], chatId, userId, caption }
+
+// 40 романтических причин любви для команды /reasons или /love
+const REASONS_OF_LOVE = [
+  "За твою невероятную улыбку, от которой теплеет даже в самый хмурый и холодный день.",
+  "За то, как ты уютно обнимаешь меня во сне и прижимаешься ближе.",
+  "За то, что с тобой я могу быть настоящим собой — без масок и сомнений.",
+  "За твои глаза, в которых отражается целый мир, в котором мне так спокойно.",
+  "За наши долгие ночные разговоры обо всём на свете под горячий чай.",
+  "За твой заразительный смех — самый красивый звук во всей Вселенной.",
+  "За то, как ты искренне радуешься мелочам и делаешь обычный день праздником.",
+  "За то, что любое путешествие с тобой — это лучшее приключение жизни.",
+  "За твоё бесконечно доброе сердце и умение поддержать в нужную секунду.",
+  "За наши совместные глупости и шутки, понятные только нам двоим.",
+  "За тепло твоих рук, когда мы гуляем по зимнему городу.",
+  "За то, как вкусно пахнут твои волосы, когда я целую тебя утром.",
+  "За то, что ты веришь в меня больше, чем кто-либо другой в этом мире.",
+  "За то, как мы вместе выбираем фильмы и засыпаем на первых 20 минутах.",
+  "За каждую чашку кофе, выпитую вместе в тишине и уюте.",
+  "За твои милые привычки, о которых знаю только я.",
+  "За то, что дом — это не место, а состояние, когда ты рядом.",
+  "За то, как ты смотришь на меня, когда думаешь, что я не замечаю.",
+  "За то, что каждый день с 21 декабря 2024 года наполнен настоящим смыслом.",
+  "За то, что ты делаешь меня лучшей версией себя с каждым днём.",
+  "За наши спонтанные прогулки и вкусную еду по ночам.",
+  "За то, как бьётся твоё сердце, когда я крепко обнимаю тебя.",
+  "За твоё невероятное терпение и умение понять меня с полуслова.",
+  "За то, что в твоих объятиях исчезают любые проблемы и тревоги.",
+  "За то, что наша история — самая красивая сказка, которую мы пишем вместе."
+];
 
 // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ TELEGRAM API ---
 async function tg(method, payload = {}) {
@@ -57,9 +87,9 @@ async function sendMessage(chatId, text, replyMarkup = null) {
   return tg('sendMessage', payload);
 }
 
-// Проверка прав доступа (только вы и девушка)
+// Проверка прав доступа
 function isAllowed(userId) {
-  if (ALLOWED_USERS.length === 0) return true; // если список пуст - разрешено всем для первого запуска
+  if (ALLOWED_USERS.length === 0) return true;
   return ALLOWED_USERS.includes(String(userId));
 }
 
@@ -128,7 +158,7 @@ function getDaysTogether() {
 
 // --- УМНЫЙ GEOCODING & EXIF ДВИЖОК ---
 
-// Обратное геокодирование (координаты -> название города/улицы)
+// Обратное геокодирование (координаты -> город / улица)
 async function reverseGeocode(lat, lng) {
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&accept-language=ru`;
@@ -176,7 +206,22 @@ async function forwardGeocode(query) {
   return null;
 }
 
-// Парсер EXIF из буфера фото (извлечение оригинальной даты и GPS)
+// Авто-распознавание города/места из текста подписи (например: "в Сочи", "в Москве", "на Красной площади")
+async function extractLocationFromCaption(caption) {
+  if (!caption) return null;
+  const match = caption.match(/(?:в|на|около|возле)\s+([А-ЯЁ][а-яё\-]+(?:\s+[А-ЯЁ][а-яё\-]+)?)/i);
+  if (match) {
+    const place = match[1].trim();
+    const blacklist = ['Этот', 'Наш', 'Твой', 'Мой', 'Первый', 'Самый', 'Прекрасный'];
+    if (!blacklist.includes(place) && place.length >= 3) {
+      const geo = await forwardGeocode(place);
+      if (geo) return geo;
+    }
+  }
+  return null;
+}
+
+// Парсер EXIF из буфера фото
 function extractExifMetadata(buffer) {
   try {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -298,7 +343,7 @@ function readRationalCoordinates(view, entryOffset, isLittleEndian, tiffOffset) 
   return values;
 }
 
-// Создание клавиатуры с категориями и кнопкой добавления локации
+// Создание инлайн-клавиатуры для момента
 function makeMomentKeyboard(momentId) {
   return {
     inline_keyboard: [
@@ -339,13 +384,16 @@ async function handleMessage(msg) {
       `💖 <b>Привет, любовь моя!</b>\n\n` +
       `Я ваш персональный семейный бот <b>«Наша История»</b>.\n` +
       `Вы вместе уже <b>${days} дней</b> (с 21.12.2024)!\n\n` +
-      `📸 <b>Как мной пользоваться:</b>\n` +
-      `• Отправь любое <b>фото</b> с прогулки, ужина или отпуска в чат, а в подписи напиши пару тёплых слов.\n` +
-      `• Отправь фото <b>как файл/документ</b> — я сам вытащу дату и GPS-координаты со смартфона!\n` +
-      `• Прикрепи <b>геопозицию (📎 ➔ Геопозиция)</b> — и на интерактивной карте появится пульсирующее сердечко.\n\n` +
-      `Команды:\n` +
-      `• /today — Воспоминание из прошлого в этот день\n` +
-      `• /stats — Сколько дней вы вместе и сколько фото в архиве`
+      `📸 <b>Что я умею:</b>\n` +
+      `• Отправь любое <b>фото</b> с прогулки, ужина или поездки — я сохраню его на сайт.\n` +
+      `• Отправь <b>альбом из нескольких фото</b> — я объединю их аккуратно.\n` +
+      `• Отправь фото <b>как файл/документ</b> — я сам считаю GPS и дату из метаданных!\n` +
+      `• Отправь <b>геопозицию (📎 ➔ Геопозиция)</b> — поставлю пульсирующее сердечко на карте.\n` +
+      `• Отправь <b>голосовое сообщение 🎤</b> — я сохраню аудио-послание в архив!\n\n` +
+      `✨ <b>Команды:</b>\n` +
+      `• /reasons — 100 причин, почему я тебя люблю 💖\n` +
+      `• /today — Воспоминание из нашего архива\n` +
+      `• /stats — Сколько дней вместе и статистика`
     );
   }
 
@@ -357,20 +405,33 @@ async function handleMessage(msg) {
       `📊 <b>Наша статистика:</b>\n\n` +
       `⏳ Мы вместе уже: <b>${days} дней</b>\n` +
       `💍 Начало отношений: <b>21 декабря 2024</b>\n` +
-      `🌐 Сайт готов к просмотру!`
+      `🌐 Сайт открыт и синхронизирован 24/7!`
     );
   }
 
-  // 3. Команда /today (Time Capsule)
+  // 3. Команда /reasons или /love или /compliment (Причины любви)
+  if (text.startsWith('/reasons') || text.startsWith('/love') || text.startsWith('/compliment')) {
+    const randomReason = REASONS_OF_LOVE[Math.floor(Math.random() * REASONS_OF_LOVE.length)];
+    return sendMessage(
+      chatId,
+      `💖 <b>Причина, почему я люблю тебя:</b>\n\n` +
+      `<i>«${randomReason}»</i>\n\n` +
+      `✨ <i>Каждый день с тобой — это счастье.</i>`
+    );
+  }
+
+  // 4. Команда /today (Time Capsule из реальной базы)
   if (text.startsWith('/today') || text.startsWith('/memory')) {
     try {
       let m = null;
       if (SUPABASE_URL && SUPABASE_KEY) {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/moments?select=*&limit=1`, {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/moments?select=*&order=createdAt.desc&limit=25`, {
           headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'apikey': SUPABASE_KEY }
         });
-        const data = await res.json();
-        if (data && data.length > 0) m = data[0];
+        const moments = await res.json();
+        if (moments && moments.length > 0) {
+          m = moments[Math.floor(Math.random() * moments.length)];
+        }
       }
 
       if (!m) {
@@ -385,7 +446,7 @@ async function handleMessage(msg) {
       await tg('sendPhoto', {
         chat_id: chatId,
         photo: m.imageUrl,
-        caption: `✨ <b>Воспоминание из нашего архива:</b>\n\n<b>${m.title}</b> (${m.date})\n${m.description || ''}`,
+        caption: `✨ <b>Воспоминание из нашего архива:</b>\n\n<b>${m.title}</b> (${m.date})\n${m.location ? '📍 ' + m.location + '\n' : ''}${m.description || ''}`,
         parse_mode: 'HTML'
       });
     } catch (e) {
@@ -394,7 +455,57 @@ async function handleMessage(msg) {
     return;
   }
 
-  // 4. Пользователь отправил геопозицию (📎 ➔ Геопозиция)
+  // 5. Обработка голосовых сообщений (msg.voice)
+  if (msg.voice) {
+    await sendMessage(chatId, '🎙️ Сохраняю твоё голосовое послание в архив любви...');
+    try {
+      const fileInfo = await tg('getFile', { file_id: msg.voice.file_id });
+      if (!fileInfo.ok || !fileInfo.result.file_path) {
+        throw new Error('Не удалось получить голосовой файл');
+      }
+
+      const downloadUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileInfo.result.file_path}`;
+      const voiceRes = await fetch(downloadUrl);
+      const buffer = Buffer.from(await voiceRes.arrayBuffer());
+
+      const fileName = `voice-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.ogg`;
+      let publicUrl = '';
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        publicUrl = await uploadToSupabaseStorage(fileName, buffer, 'audio/ogg');
+      }
+
+      const momentId = `voice-${Date.now()}`;
+      const senderName = msg.from.first_name || 'Любовь моя';
+      const moment = {
+        id: momentId,
+        title: `🎤 Голосовое признание (${senderName})`,
+        date: new Date().toISOString().slice(0, 10),
+        category: 'Уютные дни',
+        description: `Голосовое аудио-послание от ${senderName} 💌`,
+        imageUrl: publicUrl || 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=1200&q=80',
+        likes: 1,
+        isLiked: true,
+        createdAt: new Date().toISOString()
+      };
+
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        await saveMomentToSupabase(moment);
+      }
+
+      lastUserMoments.set(userId, { momentId, title: moment.title, timestamp: Date.now() });
+
+      return sendMessage(
+        chatId,
+        `💌 <b>Голосовое послание сохранено навсегда!</b>\n\n` +
+        `Теперь его можно послушать прямо на сайте в вашей общей ленте 💖`
+      );
+    } catch (err) {
+      console.error('Ошибка сохранения голоса:', err);
+      return sendMessage(chatId, `❌ Не удалось сохранить аудио: ${err.message}`);
+    }
+  }
+
+  // 6. Пользователь отправил геопозицию (📎 ➔ Геопозиция)
   if (msg.location) {
     const { latitude, longitude } = msg.location;
     const waiting = userState.get(userId);
@@ -422,7 +533,7 @@ async function handleMessage(msg) {
     );
   }
 
-  // 5. Ответ текстом на запрос города / места (AWAITING_LOCATION)
+  // 7. Ответ текстом на запрос города / места (AWAITING_LOCATION)
   if (text && userState.get(userId)?.state === 'AWAITING_LOCATION') {
     const { momentId } = userState.get(userId);
     userState.delete(userId);
@@ -448,104 +559,224 @@ async function handleMessage(msg) {
     }
   }
 
-  // 6. Обработка фотографии (msg.photo или msg.document)
+  // 8. Обработка фотографий (msg.photo или msg.document)
   const isDocImage = msg.document && (
     (msg.document.mime_type && msg.document.mime_type.startsWith('image/')) ||
     /\.(jpe?g|png|heic|webp)$/i.test(msg.document.file_name || '')
   );
 
   if ((msg.photo && msg.photo.length > 0) || isDocImage) {
-    const caption = msg.caption || 'Наш прекрасный день';
-    await sendMessage(chatId, isDocImage ? '⏳ Загружаю оригинальный файл и считываю EXIF...' : '⏳ Загружаю и оптимизирую фото...');
-
-    try {
-      const fileId = isDocImage ? msg.document.file_id : msg.photo[msg.photo.length - 1].file_id;
-      const fileInfo = await tg('getFile', { file_id: fileId });
-      if (!fileInfo.ok || !fileInfo.result.file_path) {
-        throw new Error('Не удалось получить файл от Telegram');
+    // Поддержка альбомов (media_group_id)
+    if (msg.media_group_id) {
+      const mgId = msg.media_group_id;
+      if (!mediaGroupQueue.has(mgId)) {
+        mediaGroupQueue.set(mgId, {
+          timer: null,
+          items: [],
+          chatId,
+          userId,
+          caption: msg.caption || ''
+        });
       }
+
+      const queueObj = mediaGroupQueue.get(mgId);
+      queueObj.items.push(msg);
+      if (msg.caption) queueObj.caption = msg.caption;
+
+      if (queueObj.timer) clearTimeout(queueObj.timer);
+      queueObj.timer = setTimeout(async () => {
+        const fullQueue = mediaGroupQueue.get(mgId);
+        mediaGroupQueue.delete(mgId);
+        if (fullQueue) await processMediaGroup(fullQueue);
+      }, 1500);
+
+      return;
+    }
+
+    // Одиночное фото
+    await processSinglePhoto(msg, isDocImage);
+  }
+}
+
+// Обработка одного фото
+async function processSinglePhoto(msg, isDocImage) {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const caption = msg.caption || 'Наш прекрасный день';
+
+  await sendMessage(chatId, isDocImage ? '⏳ Загружаю оригинальный файл и считываю EXIF...' : '⏳ Загружаю и оптимизирую фото...');
+
+  try {
+    const fileId = isDocImage ? msg.document.file_id : msg.photo[msg.photo.length - 1].file_id;
+    const fileInfo = await tg('getFile', { file_id: fileId });
+    if (!fileInfo.ok || !fileInfo.result.file_path) {
+      throw new Error('Не удалось получить файл от Telegram');
+    }
+
+    const downloadUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileInfo.result.file_path}`;
+    const imgRes = await fetch(downloadUrl);
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+
+    // 1. Считываем EXIF (дата съемки и GPS)
+    const exif = extractExifMetadata(buffer);
+    let detectedDate = exif.originalDate || new Date().toISOString().slice(0, 10);
+    let detectedLat = exif.gps ? exif.gps.lat : null;
+    let detectedLng = exif.gps ? exif.gps.lng : null;
+    let detectedLocation = null;
+
+    if (detectedLat && detectedLng) {
+      detectedLocation = await reverseGeocode(detectedLat, detectedLng);
+    }
+
+    // 2. Если GPS в EXIF нет, пробуем умный поиск города прямо из текста подписи!
+    if (!detectedLocation && caption) {
+      const fromCaption = await extractLocationFromCaption(caption);
+      if (fromCaption) {
+        detectedLat = fromCaption.lat;
+        detectedLng = fromCaption.lng;
+        detectedLocation = fromCaption.displayName;
+      }
+    }
+
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.jpg`;
+    let publicUrl = '';
+
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      publicUrl = await uploadToSupabaseStorage(fileName, buffer, isDocImage ? (msg.document.mime_type || 'image/jpeg') : 'image/jpeg');
+    } else {
+      const localDir = path.resolve(process.cwd(), '../assets/photos');
+      if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+      const localFilePath = path.join(localDir, fileName);
+      fs.writeFileSync(localFilePath, buffer);
+      publicUrl = `assets/photos/${fileName}`;
+    }
+
+    const momentId = `moment-${Date.now()}`;
+    const moment = {
+      id: momentId,
+      title: caption.split('\n')[0].slice(0, 80) || 'Наш день',
+      date: detectedDate,
+      category: detectedLocation ? 'Путешествия' : 'Уютные дни',
+      location: detectedLocation || null,
+      lat: detectedLat,
+      lng: detectedLng,
+      description: caption,
+      imageUrl: publicUrl,
+      likes: 1,
+      isLiked: true,
+      createdAt: new Date().toISOString()
+    };
+
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      await saveMomentToSupabase(moment);
+    }
+
+    pendingUploads.set(momentId, moment);
+    lastUserMoments.set(userId, { momentId, title: moment.title, timestamp: Date.now() });
+
+    let locationInfoText = '';
+    if (detectedLocation) {
+      locationInfoText = `\n📍 <b>Авто-локация:</b> <i>${detectedLocation}</i>\n🗺️ Метка уже на карте!`;
+    } else {
+      locationInfoText = `\n💡 <i>Хочешь поставить метку на карте? Нажми кнопку ниже или отправь геопозицию через 📎</i>`;
+    }
+
+    await sendMessage(
+      chatId,
+      `🎉 <b>Фото успешно сохранено!</b>\n\n` +
+      `📝 Заголовок: <i>${moment.title}</i>\n` +
+      `📅 Дата: <i>${moment.date}</i>` +
+      locationInfoText + `\n\n` +
+      `Выбери категорию для этого момента:`,
+      makeMomentKeyboard(momentId)
+    );
+
+  } catch (err) {
+    console.error('Ошибка сохранения:', err);
+    sendMessage(chatId, `❌ Ошибка при сохранении: ${err.message}`);
+  }
+}
+
+// Обработка группы фото (альбома)
+async function processMediaGroup(queueObj) {
+  const { chatId, userId, items, caption } = queueObj;
+  await sendMessage(chatId, `⏳ Загружаю альбом из ${items.length} фото...`);
+
+  const createdMoments = [];
+  let detectedLocation = null;
+  let detectedLat = null;
+  let detectedLng = null;
+
+  if (caption) {
+    const fromCap = await extractLocationFromCaption(caption);
+    if (fromCap) {
+      detectedLat = fromCap.lat;
+      detectedLng = fromCap.lng;
+      detectedLocation = fromCap.displayName;
+    }
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const m = items[i];
+    try {
+      const isDoc = m.document;
+      const fileId = isDoc ? m.document.file_id : m.photo[m.photo.length - 1].file_id;
+      const fileInfo = await tg('getFile', { file_id: fileId });
+      if (!fileInfo.ok || !fileInfo.result.file_path) continue;
 
       const downloadUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileInfo.result.file_path}`;
       const imgRes = await fetch(downloadUrl);
-      const arrayBuffer = await imgRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      const buffer = Buffer.from(await imgRes.arrayBuffer());
 
-      // Считываем EXIF (дата съемки и GPS)
-      const exif = extractExifMetadata(buffer);
-      let detectedDate = exif.originalDate || new Date().toISOString().slice(0, 10);
-      let detectedLat = exif.gps ? exif.gps.lat : null;
-      let detectedLng = exif.gps ? exif.gps.lng : null;
-      let detectedLocation = null;
+      const fileName = `${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}.jpg`;
+      const publicUrl = await uploadToSupabaseStorage(fileName, buffer, 'image/jpeg');
 
-      if (detectedLat && detectedLng) {
-        detectedLocation = await reverseGeocode(detectedLat, detectedLng);
+      // EXIF check if first item
+      if (!detectedLocation) {
+        const exif = extractExifMetadata(buffer);
+        if (exif.gps) {
+          detectedLat = exif.gps.lat;
+          detectedLng = exif.gps.lng;
+          detectedLocation = await reverseGeocode(detectedLat, detectedLng);
+        }
       }
 
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.jpg`;
-      let publicUrl = '';
-
-      if (SUPABASE_URL && SUPABASE_KEY) {
-        publicUrl = await uploadToSupabaseStorage(fileName, buffer, isDocImage ? (msg.document.mime_type || 'image/jpeg') : 'image/jpeg');
-      } else {
-        const localDir = path.resolve(process.cwd(), '../assets/photos');
-        if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
-        const localFilePath = path.join(localDir, fileName);
-        fs.writeFileSync(localFilePath, buffer);
-        publicUrl = `assets/photos/${fileName}`;
-      }
-
-      const momentId = `moment-${Date.now()}`;
+      const momentId = `moment-${Date.now()}-${i}`;
       const moment = {
         id: momentId,
-        title: caption.split('\n')[0].slice(0, 80) || 'Наш день',
-        date: detectedDate,
+        title: caption ? (i === 0 ? caption.slice(0, 80) : `${caption.slice(0, 60)} (${i + 1})`) : `Наш день • Фото ${i + 1}`,
+        date: new Date().toISOString().slice(0, 10),
         category: detectedLocation ? 'Путешествия' : 'Уютные дни',
         location: detectedLocation || null,
         lat: detectedLat,
         lng: detectedLng,
-        description: caption,
+        description: caption || 'Совместные воспоминания',
         imageUrl: publicUrl,
         likes: 1,
         isLiked: true,
         createdAt: new Date().toISOString()
       };
 
-      if (SUPABASE_URL && SUPABASE_KEY) {
-        await saveMomentToSupabase(moment);
-      } else {
-        const jsonPath = path.resolve(process.cwd(), '../assets/moments.json');
-        let localList = [];
-        if (fs.existsSync(jsonPath)) {
-          try { localList = JSON.parse(fs.readFileSync(jsonPath, 'utf8')); } catch (e) {}
-        }
-        localList.unshift(moment);
-        fs.writeFileSync(jsonPath, JSON.stringify(localList, null, 2));
-      }
-
-      pendingUploads.set(momentId, moment);
-      lastUserMoments.set(userId, { momentId, title: moment.title, timestamp: Date.now() });
-
-      let locationInfoText = '';
-      if (detectedLocation) {
-        locationInfoText = `\n📍 <b>Авто-локация из EXIF:</b> <i>${detectedLocation}</i>\n🗺️ Метка уже на карте!`;
-      } else {
-        locationInfoText = `\n💡 <i>Хочешь поставить метку на карте? Нажми кнопку ниже или просто отправь геопозицию через 📎</i>`;
-      }
-
-      await sendMessage(
-        chatId,
-        `🎉 <b>Фото успешно сохранено!</b>\n\n` +
-        `📝 Заголовок: <i>${moment.title}</i>\n` +
-        `📅 Дата: <i>${moment.date}</i>` +
-        locationInfoText + `\n\n` +
-        `Выбери категорию для этого момента:`,
-        makeMomentKeyboard(momentId)
-      );
-
-    } catch (err) {
-      console.error('Ошибка сохранения:', err);
-      sendMessage(chatId, `❌ Ошибка при сохранении: ${err.message}`);
+      await saveMomentToSupabase(moment);
+      createdMoments.push(moment);
+    } catch (e) {
+      console.warn('Ошибка загрузки элемента альбома:', e.message);
     }
+  }
+
+  if (createdMoments.length > 0) {
+    const leadMoment = createdMoments[0];
+    lastUserMoments.set(userId, { momentId: leadMoment.id, title: leadMoment.title, timestamp: Date.now() });
+
+    await sendMessage(
+      chatId,
+      `🎉 <b>Альбом из ${createdMoments.length} фото успешно сохранён!</b>\n\n` +
+      `📝 Название: <i>${leadMoment.title}</i>\n` +
+      (detectedLocation ? `📍 Локация: <b>${detectedLocation}</b>\n` : '') +
+      `Все фотографии уже на сайте 💖\n\n` +
+      `Выбери общую категорию для альбома:`,
+      makeMomentKeyboard(leadMoment.id)
+    );
   }
 }
 
