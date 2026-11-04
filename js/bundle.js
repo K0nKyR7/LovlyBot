@@ -922,44 +922,12 @@
     }
   }
 
-  // --- 9. INTERACTIVE MEMORY MAP ENGINE (2GIS) ---
-  class MemoryMapEngine {
-    constructor(containerId, onMomentClick) {
-      this.containerId = containerId;
-      this.map = null;
-      this.markersGroup = null;
-      this.routeLayer = null;
+  // --- 9. LOVE ATLAS ENGINE (SEXY, ZERO-DEPENDENCY, NATIVE YANDEX MAPS LINKS) ---
+  class LoveAtlasEngine {
+    constructor(onMomentClick) {
       this.onMomentClick = onMomentClick;
-      this.isInitialized = false;
-      this.showRoute = false;
-      this.activeCategory = 'all';
-      this.allMoments = [];
-    }
-
-    init(callback) {
-      if (this.isInitialized || !document.getElementById(this.containerId)) return;
-      if (typeof DG === 'undefined') {
-        setTimeout(() => this.init(callback), 300);
-        return;
-      }
-
-      DG.then(() => {
-        if (this.map) return;
-        this.map = DG.map(this.containerId, {
-          center: [55.7558, 37.6173],
-          zoom: 6,
-          zoomControl: true,
-          scrollWheelZoom: true
-        });
-
-        this.markersGroup = DG.featureGroup().addTo(this.map);
-        this.isInitialized = true;
-        if (callback) {
-          callback();
-        } else if (this.allMoments && this.allMoments.length > 0) {
-          this.renderMoments(this.allMoments);
-        }
-      });
+      this.activeCityFilter = 'all';
+      this.moments = [];
     }
 
     calculateDistanceKm(lat1, lon1, lat2, lon2) {
@@ -974,133 +942,192 @@
       return R * c;
     }
 
-    createHeartIcon() {
-      return DG.divIcon({
-        className: 'custom-map-heart-marker',
-        html: `
-          <div class="relative cursor-pointer -translate-x-1/2 -translate-y-full group">
-            <div class="w-10 h-10 rounded-full bg-white border-2 border-rose-500 shadow-lg flex items-center justify-center text-rose-500 hover:scale-110 hover:bg-rose-500 hover:text-white transition-all duration-300">
-              <i class="fa-solid fa-heart text-base animate-pulse"></i>
-            </div>
-            <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-rose-500 mx-auto -mt-[1px]"></div>
-          </div>
-        `,
-        iconSize: [40, 48],
-        iconAnchor: [20, 48],
-        popupAnchor: [0, -46]
-      });
-    }
+    render(moments) {
+      this.moments = moments || [];
+      const container = document.getElementById('atlas-places-container');
+      const emptyState = document.getElementById('empty-atlas-state');
+      const filterContainer = document.getElementById('atlas-city-filters');
+      if (!container) return;
 
-    setCategory(category) {
-      this.activeCategory = category;
-      this.renderMoments(this.allMoments);
-    }
+      // Filter moments that have location or coordinates
+      const withLoc = this.moments.filter(m => (m.location && m.location.trim()) || (m.lat && m.lng));
 
-    toggleRoute() {
-      this.showRoute = !this.showRoute;
-      this.renderMoments(this.allMoments);
-      return this.showRoute;
-    }
-
-    fitAll() {
-      if (!this.map) return;
-      const withCoords = this.getFiltered(this.allMoments);
-      const bounds = withCoords.map(m => [m.lat, m.lng]);
-      if (bounds.length > 0) {
-        this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-      }
-    }
-
-    getFiltered(moments) {
-      let withCoords = (moments || []).filter(m => m.lat && m.lng);
-      if (this.activeCategory && this.activeCategory !== 'all') {
-        withCoords = withCoords.filter(m => m.category === this.activeCategory);
-      }
-      return withCoords;
-    }
-
-    renderMoments(moments) {
-      this.allMoments = moments || [];
-      if (!this.map) {
-        this.init(() => this.renderMoments(this.allMoments));
+      if (withLoc.length === 0) {
+        container.innerHTML = '';
+        if (filterContainer) filterContainer.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
+        this.updateStats(0, 0, 0, 0);
         return;
       }
-      if (!this.markersGroup) return;
 
-      this.markersGroup.clearLayers();
-      if (this.routeLayer) {
-        this.map.removeLayer(this.routeLayer);
-        this.routeLayer = null;
-      }
+      if (emptyState) emptyState.classList.add('hidden');
 
-      const filtered = this.getFiltered(this.allMoments);
+      // Sort chronologically
+      const sorted = [...withLoc].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-      // Calculate total distance & stats across all coordinated moments
-      const sortedChronological = [...this.allMoments.filter(m => m.lat && m.lng)].sort((a, b) => new Date(a.date) - new Date(b.date));
+      // Calculate total distance & cities
       let totalDistance = 0;
-      for (let i = 0; i < sortedChronological.length - 1; i++) {
-        totalDistance += this.calculateDistanceKm(
-          sortedChronological[i].lat, sortedChronological[i].lng,
-          sortedChronological[i + 1].lat, sortedChronological[i + 1].lng
-        );
+      const citiesSet = new Set();
+      for (let i = 0; i < sorted.length; i++) {
+        const m = sorted[i];
+        if (m.location) {
+          const mainCity = m.location.split('•').pop().split(',')[0].trim();
+          if (mainCity) citiesSet.add(mainCity);
+        }
+        if (i < sorted.length - 1 && m.lat && m.lng && sorted[i + 1].lat && sorted[i + 1].lng) {
+          totalDistance += this.calculateDistanceKm(m.lat, m.lng, sorted[i + 1].lat, sorted[i + 1].lng);
+        }
       }
 
-      const distEl = document.getElementById('map-stats-distance');
-      if (distEl) {
-        distEl.innerText = totalDistance > 0 ? `${Math.round(totalDistance).toLocaleString('ru-RU')} км` : '0 км';
+      this.updateStats(
+        withLoc.length,
+        citiesSet.size || 1,
+        withLoc.filter(m => m.lat && m.lng).length,
+        totalDistance
+      );
+
+      // Render City Filter Tabs
+      if (filterContainer) {
+        const citiesArr = Array.from(citiesSet);
+        if (citiesArr.length > 1) {
+          filterContainer.innerHTML = `
+            <button class="atlas-city-pill px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              this.activeCityFilter === 'all' 
+                ? 'bg-rose-500 text-white shadow-sm' 
+                : 'bg-white/80 hover:bg-rose-50 text-zinc-600 border border-rose-100'
+            }" data-city="all">Все локации (${withLoc.length})</button>
+            ${citiesArr.map(c => `
+              <button class="atlas-city-pill px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                this.activeCityFilter === c 
+                  ? 'bg-rose-500 text-white shadow-sm' 
+                  : 'bg-white/80 hover:bg-rose-50 text-zinc-600 border border-rose-100'
+              }" data-city="${escapeHtml(c)}">${escapeHtml(c)}</button>
+            `).join('')}
+          `;
+          filterContainer.querySelectorAll('.atlas-city-pill').forEach(btn => {
+            btn.onclick = () => {
+              this.activeCityFilter = btn.getAttribute('data-city');
+              this.render(this.moments);
+            };
+          });
+        } else {
+          filterContainer.innerHTML = '';
+        }
       }
 
-      // Draw Route Polyline if active
-      if (this.showRoute && sortedChronological.length > 1) {
-        const routeCoords = sortedChronological.map(m => [m.lat, m.lng]);
-        this.routeLayer = DG.polyline(routeCoords, {
-          color: '#f43f5e',
-          weight: 4,
-          opacity: 0.9,
-          className: 'romantic-route-line',
-          dashArray: '8, 8'
-        }).addTo(this.map);
-      }
+      // Filter by city if chosen
+      const displayMoments = this.activeCityFilter === 'all'
+        ? sorted
+        : sorted.filter(m => (m.location || '').includes(this.activeCityFilter));
 
-      if (filtered.length === 0) return;
+      // Render Atlas Cards
+      container.innerHTML = displayMoments.map((m, idx) => {
+        // Distance from previous place
+        let distanceBadge = '';
+        if (idx > 0 && m.lat && m.lng && displayMoments[idx - 1].lat && displayMoments[idx - 1].lng) {
+          const dist = this.calculateDistanceKm(
+            displayMoments[idx - 1].lat, displayMoments[idx - 1].lng,
+            m.lat, m.lng
+          );
+          if (dist > 5) {
+            distanceBadge = `<span class="text-[11px] font-semibold text-rose-500 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+              <i class="fa-solid fa-car text-[9px]"></i> +${Math.round(dist).toLocaleString('ru-RU')} км
+            </span>`;
+          }
+        }
 
-      const bounds = [];
-      filtered.forEach(moment => {
-        const latLng = [moment.lat, moment.lng];
-        bounds.push(latLng);
-        const marker = DG.marker(latLng, { icon: this.createHeartIcon() });
-        const popupHtml = `
-          <div class="p-2 max-w-[220px] font-sans">
-            <div class="rounded-xl overflow-hidden aspect-[16/10] bg-rose-50 mb-2 relative">
-              <img src="${moment.imageUrl}" alt="${escapeHtml(moment.title)}" class="w-full h-full object-cover" />
-              <span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-rose-600 backdrop-blur-sm">
-                ${escapeHtml(moment.category || 'Момент')}
-              </span>
+        // Direct Yandex Maps URL
+        let yandexUrl = '';
+        if (m.lat && m.lng) {
+          yandexUrl = `https://yandex.ru/maps/?pt=${m.lng},${m.lat}&z=16&l=map`;
+        } else if (m.location) {
+          yandexUrl = `https://yandex.ru/maps/?text=${encodeURIComponent(m.location)}`;
+        }
+
+        return `
+          <div class="glass-card rounded-2xl p-4 border border-rose-100/80 hover:border-rose-300 transition-all duration-300 shadow-xs hover:shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div class="flex items-center gap-3.5 flex-1 min-w-0">
+              <div 
+                class="atlas-photo-trigger w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 bg-rose-50 cursor-pointer relative group border border-rose-100"
+                data-id="${m.id}"
+                title="Нажмите, чтобы открыть фото во весь экран"
+              >
+                <img src="${m.imageUrl}" alt="${escapeHtml(m.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                  <i class="fa-solid fa-expand text-xs"></i>
+                </div>
+              </div>
+
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap mb-1">
+                  <span class="text-xs px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-600 border border-rose-100">
+                    ${escapeHtml(m.category || 'Воспоминание')}
+                  </span>
+                  <span class="text-[11px] text-zinc-400 font-medium">
+                    ${formatDateRu(m.date)}
+                  </span>
+                  ${distanceBadge}
+                </div>
+
+                <h4 class="text-sm sm:text-base font-bold text-zinc-800 truncate font-serif-romantic">
+                  ${escapeHtml(m.title)}
+                </h4>
+
+                <p class="text-xs text-zinc-600 flex items-center gap-1.5 mt-0.5 truncate">
+                  <i class="fa-solid fa-location-dot text-rose-500 shrink-0 text-[11px]"></i>
+                  <span class="truncate">${escapeHtml(m.location || 'Геометка сохранена')}</span>
+                </p>
+              </div>
             </div>
-            <h4 class="font-bold text-zinc-800 text-sm leading-tight mb-1 font-serif-romantic">${escapeHtml(moment.title)}</h4>
-            <p class="text-[11px] text-zinc-500 mb-2">${formatDateRu(moment.date)} ${moment.location ? '• ' + escapeHtml(moment.location) : ''}</p>
-            <button class="map-popup-view-btn w-full py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-sm transition-colors" data-id="${moment.id}">
-              Открыть воспоминание
-            </button>
+
+            <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-rose-50">
+              ${yandexUrl ? `
+                <a 
+                  href="${yandexUrl}" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 transition-colors flex items-center gap-1.5 shadow-xs"
+                  title="Открыть эту точку в приложении Яндекс Карт"
+                >
+                  <i class="fa-solid fa-location-arrow text-[11px] text-amber-600"></i>
+                  <span>В Яндекс Карты</span>
+                </a>
+              ` : ''}
+
+              <button 
+                class="atlas-view-moment-btn px-3 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-100 transition-colors flex items-center gap-1.5"
+                data-id="${m.id}"
+                title="Подробнее о моменте"
+              >
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                <span class="hidden sm:inline">Фото</span>
+              </button>
+            </div>
           </div>
         `;
-        marker.bindPopup(popupHtml, { className: 'custom-map-popup', closeButton: false, maxWidth: 240 });
-        marker.on('popupopen', () => {
-          const btn = document.querySelector(`.map-popup-view-btn[data-id="${moment.id}"]`);
-          if (btn) btn.onclick = () => { if (this.onMomentClick) this.onMomentClick(moment); };
-        });
-        this.markersGroup.addLayer(marker);
-      });
+      }).join('');
 
-      if (bounds.length > 0) {
-        this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-      }
+      // Bind Clicks
+      container.querySelectorAll('.atlas-photo-trigger, .atlas-view-moment-btn').forEach(el => {
+        el.onclick = () => {
+          const id = el.getAttribute('data-id');
+          const moment = this.moments.find(m => m.id === id);
+          if (moment && this.onMomentClick) {
+            this.onMomentClick(moment);
+          }
+        };
+      });
     }
 
-    invalidateSize() {
-      if (this.map && this.map.invalidateSize) {
-        setTimeout(() => this.map.invalidateSize(), 200);
-      }
+    updateStats(places, cities, photos, distance) {
+      const elPlaces = document.getElementById('map-stats-places');
+      const elCities = document.getElementById('map-stats-cities');
+      const elPhotos = document.getElementById('map-stats-photos');
+      const elDist = document.getElementById('map-stats-distance');
+      if (elPlaces) elPlaces.innerText = places;
+      if (elCities) elCities.innerText = cities;
+      if (elPhotos) elPhotos.innerText = photos;
+      if (elDist) elDist.innerText = distance > 0 ? `${Math.round(distance).toLocaleString('ru-RU')} км` : '0 км';
     }
   }
 
@@ -1257,7 +1284,7 @@
       this.audio = new AmbientAudio();
       this.storage = new StorageManager();
       this.exifEngine = new ExifGeoEngine();
-      this.mapEngine = new MemoryMapEngine('memory-map', (m) => this.openLightbox(m));
+      this.atlasEngine = new LoveAtlasEngine((m) => this.openLightbox(m));
       this.photobook = new PhotobookGenerator();
       this.activeLightboxMoment = null;
       this.uploadedImageBlob = null;
@@ -1431,23 +1458,7 @@
 
     renderMap() {
       const filtered = this.getFilteredMoments();
-      this.mapEngine.renderMoments(filtered);
-      this.mapEngine.invalidateSize();
-
-      // Calculate Map Statistics
-      const withCoords = filtered.filter(m => m.lat && m.lng);
-      const cities = new Set(
-        withCoords
-          .map(m => m.location ? m.location.split('•').pop().split(',')[0].trim() : '')
-          .filter(Boolean)
-      );
-
-      const elPlaces = document.getElementById('map-stats-places');
-      const elCities = document.getElementById('map-stats-cities');
-      const elPhotos = document.getElementById('map-stats-photos');
-      if (elPlaces) elPlaces.innerText = withCoords.length;
-      if (elCities) elCities.innerText = cities.size || (withCoords.length > 0 ? 1 : 0);
-      if (elPhotos) elPhotos.innerText = withCoords.length;
+      this.atlasEngine.render(filtered);
     }
 
     renderTimeline() {
@@ -1600,39 +1611,6 @@
           btn.classList.add('active', 'bg-rose-500', 'text-white', 'shadow-md');
           btn.classList.remove('text-zinc-600', 'hover:text-rose-600');
           this.renderCurrentView();
-        };
-      });
-
-      // Map controls: Route toggle, Recenter, Category filters
-      const routeToggleBtn = document.getElementById('map-toggle-route-btn');
-      if (routeToggleBtn) {
-        routeToggleBtn.onclick = () => {
-          const isActive = this.mapEngine.toggleRoute();
-          if (isActive) {
-            routeToggleBtn.classList.add('active');
-          } else {
-            routeToggleBtn.classList.remove('active');
-          }
-        };
-      }
-
-      const mapRecenterBtn = document.getElementById('map-recenter-btn');
-      if (mapRecenterBtn) {
-        mapRecenterBtn.onclick = () => {
-          this.mapEngine.fitAll();
-        };
-      }
-
-      document.querySelectorAll('.map-cat-btn').forEach(btn => {
-        btn.onclick = () => {
-          document.querySelectorAll('.map-cat-btn').forEach(b => {
-            b.classList.remove('active', 'bg-rose-500', 'text-white', 'shadow-sm');
-            b.classList.add('bg-white/80', 'text-zinc-600', 'border', 'border-rose-100');
-          });
-          btn.classList.add('active', 'bg-rose-500', 'text-white', 'shadow-sm');
-          btn.classList.remove('bg-white/80', 'text-zinc-600', 'border', 'border-rose-100');
-          const cat = btn.getAttribute('data-category');
-          this.mapEngine.setCategory(cat);
         };
       });
 
