@@ -1,5 +1,5 @@
 // ============================================================
-// INTERACTIVE MEMORY MAP ENGINE (LEAFLET + CUSTOM PINS)
+// INTERACTIVE MEMORY MAP ENGINE (2GIS + CUSTOM HEART PINS)
 // ============================================================
 
 export class MemoryMapEngine {
@@ -11,32 +11,31 @@ export class MemoryMapEngine {
     this.isInitialized = false;
   }
 
-  init() {
+  init(callback) {
     if (this.isInitialized || !document.getElementById(this.containerId)) return;
-    if (typeof L === 'undefined') {
-      console.warn('Leaflet is not loaded yet');
+    if (typeof DG === 'undefined') {
+      setTimeout(() => this.init(callback), 300);
       return;
     }
 
-    // Default center (e.g. Moscow/Central coordinates)
-    this.map = L.map(this.containerId, {
-      zoomControl: true,
-      scrollWheelZoom: true
-    }).setView([55.7558, 37.6173], 6);
+    DG.then(() => {
+      if (this.map) return;
+      this.map = DG.map(this.containerId, {
+        center: [55.7558, 37.6173],
+        zoom: 6,
+        zoomControl: true,
+        scrollWheelZoom: true
+      });
 
-    // Esri World Street Map - High-speed, free, reliable, no rate-limiting or blocking
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri &mdash; OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(this.map);
-
-    this.markersGroup = L.layerGroup().addTo(this.map);
-    this.isInitialized = true;
+      this.markersGroup = DG.featureGroup().addTo(this.map);
+      this.isInitialized = true;
+      if (callback) callback();
+    });
   }
 
   // Create customized glowing heart pin icon
   createHeartIcon(moment) {
-    return L.divIcon({
+    return DG.divIcon({
       className: 'custom-map-heart-marker',
       html: `
         <div class="relative group cursor-pointer -translate-x-1/2 -translate-y-full">
@@ -55,8 +54,11 @@ export class MemoryMapEngine {
   }
 
   renderMoments(moments) {
-    if (!this.map) this.init();
-    if (!this.map || !this.markersGroup) return;
+    if (!this.map) {
+      this.init(() => this.renderMoments(moments));
+      return;
+    }
+    if (!this.markersGroup) return;
 
     this.markersGroup.clearLayers();
     const momentsWithCoords = moments.filter(m => m.lat && m.lng);
@@ -71,7 +73,7 @@ export class MemoryMapEngine {
       const latLng = [moment.lat, moment.lng];
       bounds.push(latLng);
 
-      const marker = L.marker(latLng, {
+      const marker = DG.marker(latLng, {
         icon: this.createHeartIcon(moment)
       });
 
@@ -119,7 +121,7 @@ export class MemoryMapEngine {
   }
 
   invalidateSize() {
-    if (this.map) {
+    if (this.map && this.map.invalidateSize) {
       setTimeout(() => this.map.invalidateSize(), 200);
     }
   }

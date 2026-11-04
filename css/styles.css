@@ -156,18 +156,20 @@ body {
   margin-bottom: 1.25rem;
 }
 
-/* Custom Leaflet Map styling */
+/* Custom 2GIS Map styling */
 .custom-map-heart-marker {
   background: transparent;
   border: none;
 }
-.custom-map-popup .leaflet-popup-content-wrapper {
+.custom-map-popup .leaflet-popup-content-wrapper,
+.custom-map-popup .dg-popup-content-wrapper {
   border-radius: 1.25rem;
   padding: 0.25rem;
   box-shadow: 0 12px 30px -6px rgba(225, 29, 72, 0.2);
   border: 1px solid rgba(254, 205, 211, 0.8);
 }
-.custom-map-popup .leaflet-popup-tip {
+.custom-map-popup .leaflet-popup-tip,
+.custom-map-popup .dg-popup-tip {
   background: white;
 }
 

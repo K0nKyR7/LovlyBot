@@ -47,6 +47,7 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname.includes('telegram.org')) return;
   if (url.hostname.includes('openstreetmap.org')) return;
   if (url.hostname.includes('arcgisonline.com')) return;
+  if (url.hostname.includes('2gis.ru') || url.hostname.includes('2gis.com')) return;
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {

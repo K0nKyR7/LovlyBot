@@ -922,7 +922,7 @@
     }
   }
 
-  // --- 9. INTERACTIVE MEMORY MAP ENGINE (LEAFLET) ---
+  // --- 9. INTERACTIVE MEMORY MAP ENGINE (2GIS) ---
   class MemoryMapEngine {
     constructor(containerId, onMomentClick) {
       this.containerId = containerId;
@@ -936,22 +936,30 @@
       this.allMoments = [];
     }
 
-    init() {
+    init(callback) {
       if (this.isInitialized || !document.getElementById(this.containerId)) return;
-      if (typeof L === 'undefined') return;
+      if (typeof DG === 'undefined') {
+        setTimeout(() => this.init(callback), 300);
+        return;
+      }
 
-      this.map = L.map(this.containerId, {
-        zoomControl: true,
-        scrollWheelZoom: true
-      }).setView([55.7558, 37.6173], 6);
+      DG.then(() => {
+        if (this.map) return;
+        this.map = DG.map(this.containerId, {
+          center: [55.7558, 37.6173],
+          zoom: 6,
+          zoomControl: true,
+          scrollWheelZoom: true
+        });
 
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-        attribution: '&copy; Esri &mdash; OpenStreetMap contributors',
-        maxZoom: 19
-      }).addTo(this.map);
-
-      this.markersGroup = L.layerGroup().addTo(this.map);
-      this.isInitialized = true;
+        this.markersGroup = DG.featureGroup().addTo(this.map);
+        this.isInitialized = true;
+        if (callback) {
+          callback();
+        } else if (this.allMoments && this.allMoments.length > 0) {
+          this.renderMoments(this.allMoments);
+        }
+      });
     }
 
     calculateDistanceKm(lat1, lon1, lat2, lon2) {
@@ -967,7 +975,7 @@
     }
 
     createHeartIcon() {
-      return L.divIcon({
+      return DG.divIcon({
         className: 'custom-map-heart-marker',
         html: `
           <div class="relative cursor-pointer -translate-x-1/2 -translate-y-full group">
@@ -1013,8 +1021,11 @@
 
     renderMoments(moments) {
       this.allMoments = moments || [];
-      if (!this.map) this.init();
-      if (!this.map || !this.markersGroup) return;
+      if (!this.map) {
+        this.init(() => this.renderMoments(this.allMoments));
+        return;
+      }
+      if (!this.markersGroup) return;
 
       this.markersGroup.clearLayers();
       if (this.routeLayer) {
@@ -1042,7 +1053,7 @@
       // Draw Route Polyline if active
       if (this.showRoute && sortedChronological.length > 1) {
         const routeCoords = sortedChronological.map(m => [m.lat, m.lng]);
-        this.routeLayer = L.polyline(routeCoords, {
+        this.routeLayer = DG.polyline(routeCoords, {
           color: '#f43f5e',
           weight: 4,
           opacity: 0.9,
@@ -1057,17 +1068,17 @@
       filtered.forEach(moment => {
         const latLng = [moment.lat, moment.lng];
         bounds.push(latLng);
-        const marker = L.marker(latLng, { icon: this.createHeartIcon() });
+        const marker = DG.marker(latLng, { icon: this.createHeartIcon() });
         const popupHtml = `
           <div class="p-2 max-w-[220px] font-sans">
             <div class="rounded-xl overflow-hidden aspect-[16/10] bg-rose-50 mb-2 relative">
-              <img src="${moment.imageUrl}" alt="${moment.title}" class="w-full h-full object-cover" />
+              <img src="${moment.imageUrl}" alt="${escapeHtml(moment.title)}" class="w-full h-full object-cover" />
               <span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-rose-600 backdrop-blur-sm">
-                ${moment.category || 'Момент'}
+                ${escapeHtml(moment.category || 'Момент')}
               </span>
             </div>
-            <h4 class="font-bold text-zinc-800 text-sm leading-tight mb-1 font-serif-romantic">${moment.title}</h4>
-            <p class="text-[11px] text-zinc-500 mb-2">${moment.date} ${moment.location ? '• ' + moment.location : ''}</p>
+            <h4 class="font-bold text-zinc-800 text-sm leading-tight mb-1 font-serif-romantic">${escapeHtml(moment.title)}</h4>
+            <p class="text-[11px] text-zinc-500 mb-2">${formatDateRu(moment.date)} ${moment.location ? '• ' + escapeHtml(moment.location) : ''}</p>
             <button class="map-popup-view-btn w-full py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-sm transition-colors" data-id="${moment.id}">
               Открыть воспоминание
             </button>
@@ -1087,7 +1098,9 @@
     }
 
     invalidateSize() {
-      if (this.map) setTimeout(() => this.map.invalidateSize(), 200);
+      if (this.map && this.map.invalidateSize) {
+        setTimeout(() => this.map.invalidateSize(), 200);
+      }
     }
   }
 
