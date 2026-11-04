@@ -2,7 +2,7 @@
 // SERVICE WORKER • НАША ИСТОРИЯ (PWA & OFFLINE CACHE)
 // ============================================================
 
-const CACHE_NAME = 'love-story-v2';
+const CACHE_NAME = 'love-story-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',

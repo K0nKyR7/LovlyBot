@@ -1304,6 +1304,7 @@
       this.moments = [];
       this.currentView = 'timeline';
       this.currentFilter = 'Все';
+      this.searchQuery = '';
       this.currentPinInput = '';
       this.correctPin = INITIAL_CONFIG.defaultPin;
       this.isUnlocked = false;
@@ -1319,9 +1320,23 @@
       this.activeLightboxMoment = null;
       this.uploadedImageBlob = null;
       this.uploadedImageDataUrl = null;
+      this.slideshowTimer = null;
+      this.slideshowIndex = 0;
+      this.isSlideshowPlaying = false;
+      this.slideshowList = [];
     }
 
     async init() {
+      // 1. Theme initialization
+      const savedTheme = localStorage.getItem('love_theme');
+      if (savedTheme === 'dark') {
+        document.body.classList.add('dark-theme');
+        const themeBtn = document.getElementById('theme-toggle-btn');
+        if (themeBtn) {
+          themeBtn.innerHTML = '<i class="fa-solid fa-sun text-sm text-amber-400"></i>';
+        }
+      }
+
       await this.storage.init();
       const savedPin = await this.storage.getSetting('pin');
       this.correctPin = savedPin || INITIAL_CONFIG.defaultPin;
@@ -1331,8 +1346,9 @@
 
       this.petals = new PetalEffect('petals-canvas');
 
+      const rememberedDevice = localStorage.getItem('love_app_remember_device');
       const sessionUnlocked = sessionStorage.getItem('app_unlocked');
-      if (sessionUnlocked === 'true') {
+      if (rememberedDevice === 'true' || sessionUnlocked === 'true') {
         this.unlockApp(false);
       } else {
         this.setupLockScreen();
@@ -1410,6 +1426,10 @@
       if (this.currentPinInput === this.correctPin) {
         this.failedPinAttempts = 0;
         sessionStorage.setItem('app_unlocked', 'true');
+        const remCheckbox = document.getElementById('remember-device-checkbox');
+        if (remCheckbox && remCheckbox.checked) {
+          localStorage.setItem('love_app_remember_device', 'true');
+        }
         this.unlockApp(true);
       } else {
         this.failedPinAttempts = (this.failedPinAttempts || 0) + 1;
@@ -1452,20 +1472,83 @@
     async loadAndRenderAll() {
       this.moments = await this.storage.getMoments();
       this.renderCategoryPills();
+      this.renderFlashback();
+      this.syncMobileNavActive();
       this.renderCurrentView();
       this.updateCloudStatusIndicator();
+    }
+
+    renderFlashback() {
+      const widget = document.getElementById('flashback-widget');
+      if (!widget) return;
+      if (!this.moments || this.moments.length === 0) {
+        widget.classList.add('hidden');
+        return;
+      }
+
+      const today = new Date().toISOString().slice(5, 10); // "MM-DD"
+      // 1. Проверяем совпадение даты (месяц и день) с прошлыми датами
+      let match = this.moments.find(m => m.date && m.date.slice(5) === today && m.date !== new Date().toISOString().slice(0, 10));
+      let badge = 'В этот день в нашей истории';
+
+      // 2. Если сегодня точных совпадений нет — берем любимый момент
+      if (!match) {
+        const liked = this.moments.filter(m => m.isLiked && m.imageUrl);
+        if (liked.length > 0) {
+          match = liked[Math.floor(Math.random() * liked.length)];
+          badge = 'Любимое воспоминание дня';
+        }
+      }
+
+      // 3. Либо любое яркое фото из архива
+      if (!match) {
+        const withImg = this.moments.filter(m => m.imageUrl);
+        if (withImg.length > 0) {
+          match = withImg[Math.floor(Math.random() * withImg.length)];
+          badge = 'Воспоминание из нашего архива';
+        }
+      }
+
+      if (!match) {
+        widget.classList.add('hidden');
+        return;
+      }
+
+      const badgeEl = document.getElementById('flashback-badge-text');
+      const titleEl = document.getElementById('flashback-title');
+      const dateEl = document.getElementById('flashback-date');
+      const imgEl = document.getElementById('flashback-img');
+      const openBtn = document.getElementById('flashback-open-btn');
+      const thumb = document.getElementById('flashback-thumb');
+
+      if (badgeEl) badgeEl.innerText = badge;
+      if (titleEl) titleEl.innerText = match.title;
+      if (dateEl) dateEl.innerText = `${formatDateRu(match.date)}${match.location ? ' • ' + match.location : ''}`;
+      if (imgEl) imgEl.src = match.imageUrl;
+
+      const triggerOpen = () => this.openLightbox(match);
+      if (openBtn) openBtn.onclick = triggerOpen;
+      if (thumb) thumb.onclick = triggerOpen;
+
+      widget.classList.remove('hidden');
     }
 
     renderCategoryPills() {
       const container = document.getElementById('category-pills');
       if (!container) return;
-      container.innerHTML = CATEGORIES.map(cat => `
+      const pills = [
+        { id: 'Все', label: 'Все' },
+        { id: '❤️ Любимые', label: '❤️ Любимые' },
+        ...CATEGORIES.slice(1).map(c => ({ id: c, label: c }))
+      ];
+
+      container.innerHTML = pills.map(p => `
         <button class="category-pill whitespace-nowrap px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all ${
-          this.currentFilter === cat 
+          this.currentFilter === p.id 
             ? 'bg-rose-500 text-white shadow-md shadow-rose-500/25' 
             : 'bg-white/80 text-zinc-600 hover:bg-rose-50 border border-rose-100'
-        }" data-cat="${cat}">
-          ${cat}
+        }" data-cat="${p.id}">
+          ${p.label}
         </button>
       `).join('');
 
@@ -1473,14 +1556,64 @@
         btn.onclick = () => {
           this.currentFilter = btn.getAttribute('data-cat');
           this.renderCategoryPills();
+          this.syncMobileNavActive();
           this.renderCurrentView();
         };
       });
     }
 
+    switchView(viewName) {
+      this.currentView = viewName;
+      document.querySelectorAll('.view-tab-btn').forEach(b => {
+        const matches = b.getAttribute('data-view') === viewName;
+        b.classList.toggle('active', matches);
+        b.classList.toggle('bg-rose-500', matches);
+        b.classList.toggle('text-white', matches);
+        b.classList.toggle('shadow-md', matches);
+        b.classList.toggle('text-zinc-600', !matches);
+        b.classList.toggle('hover:text-rose-600', !matches);
+      });
+      this.syncMobileNavActive();
+      this.renderCurrentView();
+    }
+
+    syncMobileNavActive() {
+      document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+        const v = btn.getAttribute('data-view');
+        const f = btn.getAttribute('data-filter');
+        let isActive = false;
+        if (f && (this.currentFilter === '❤️ Любимые' || this.currentFilter === 'Любимые')) {
+          isActive = true;
+        } else if (v && v === this.currentView && this.currentFilter !== '❤️ Любимые') {
+          isActive = true;
+        }
+        btn.classList.toggle('active', isActive);
+        btn.classList.toggle('text-rose-600', isActive);
+        btn.classList.toggle('text-zinc-400', !isActive);
+      });
+    }
+
     getFilteredMoments() {
-      if (this.currentFilter === 'Все') return this.moments;
-      return this.moments.filter(m => m.category === this.currentFilter);
+      let list = this.moments;
+      if (this.currentFilter === '❤️ Любимые' || this.currentFilter === 'Любимые') {
+        list = list.filter(m => m.isLiked);
+      } else if (this.currentFilter !== 'Все') {
+        list = list.filter(m => m.category === this.currentFilter);
+      }
+
+      if (this.searchQuery && this.searchQuery.trim()) {
+        const q = this.searchQuery.trim().toLowerCase();
+        list = list.filter(m => {
+          return (
+            (m.title && m.title.toLowerCase().includes(q)) ||
+            (m.description && m.description.toLowerCase().includes(q)) ||
+            (m.location && m.location.toLowerCase().includes(q)) ||
+            (m.category && m.category.toLowerCase().includes(q))
+          );
+        });
+      }
+
+      return list;
     }
 
     renderCurrentView() {
@@ -1589,6 +1722,9 @@
         const elTotalDays = document.getElementById('counter-total-days');
         if (elTotalDays) elTotalDays.innerText = stats.totalDays.toLocaleString('ru-RU');
 
+        const elMiniCounter = document.getElementById('header-mini-counter-text');
+        if (elMiniCounter) elMiniCounter.innerText = `Вместе ${stats.totalDays.toLocaleString('ru-RU')} дн. 💖`;
+
         const elYears = document.getElementById('counter-years');
         const elMonths = document.getElementById('counter-months');
         const elDays = document.getElementById('counter-days');
@@ -1610,6 +1746,20 @@
       };
       update();
       setInterval(update, 1000);
+
+      // Scroll listener for sticky mini counter
+      window.addEventListener('scroll', () => {
+        const miniBtn = document.getElementById('header-mini-counter');
+        if (miniBtn) {
+          if (window.scrollY > 280) {
+            miniBtn.classList.remove('hidden');
+            miniBtn.classList.add('sm:flex');
+          } else {
+            miniBtn.classList.add('hidden');
+            miniBtn.classList.remove('sm:flex');
+          }
+        }
+      }, { passive: true });
     }
 
     openLightbox(moment) {
@@ -1653,19 +1803,256 @@
       this.openLightbox(list[nextIdx]);
     }
 
+    // --- SLIDESHOW CONTROLLER ---
+    startSlideshow() {
+      const list = this.getFilteredMoments().filter(m => m.imageUrl);
+      if (list.length === 0) {
+        alert('В текущей выборке пока нет фотографий для показа.');
+        return;
+      }
+      this.slideshowList = list;
+      this.slideshowIndex = 0;
+      this.isSlideshowPlaying = true;
+
+      const modal = document.getElementById('slideshow-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      // Auto-start background music
+      if (!this.audio.isPlaying) {
+        this.audio.startSynthAtmosphere();
+        const musicBtn = document.getElementById('music-toggle-btn');
+        if (musicBtn) {
+          musicBtn.classList.add('bg-rose-500', 'text-white', 'animate-pulse');
+          musicBtn.classList.remove('bg-white/80', 'text-zinc-700');
+          musicBtn.querySelector('i').className = 'fa-solid fa-volume-high';
+        }
+      }
+
+      this.showSlide(0);
+      this.scheduleNextSlide();
+    }
+
+    stopSlideshow() {
+      if (this.slideshowTimer) {
+        clearInterval(this.slideshowTimer);
+        this.slideshowTimer = null;
+      }
+      this.isSlideshowPlaying = false;
+      const modal = document.getElementById('slideshow-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    showSlide(idx) {
+      if (!this.slideshowList || this.slideshowList.length === 0) return;
+      if (idx < 0) idx = this.slideshowList.length - 1;
+      if (idx >= this.slideshowList.length) idx = 0;
+      this.slideshowIndex = idx;
+
+      const moment = this.slideshowList[idx];
+      const img = document.getElementById('slideshow-img');
+      const title = document.getElementById('slideshow-title');
+      const meta = document.getElementById('slideshow-meta');
+      const desc = document.getElementById('slideshow-desc');
+      const progress = document.getElementById('slideshow-progress');
+
+      if (img) {
+        img.classList.remove('slideshow-active-img');
+        img.src = moment.imageUrl;
+        setTimeout(() => img.classList.add('slideshow-active-img'), 40);
+      }
+      if (title) title.innerText = moment.title;
+      if (meta) meta.innerText = `${formatDateRu(moment.date)} ${moment.location ? '• ' + moment.location : ''}`;
+      if (desc) {
+        desc.innerText = moment.description || '';
+        desc.classList.toggle('hidden', !moment.description);
+      }
+      if (progress) {
+        const pct = Math.round(((idx + 1) / this.slideshowList.length) * 100);
+        progress.style.width = `${pct}%`;
+      }
+    }
+
+    scheduleNextSlide() {
+      if (this.slideshowTimer) clearInterval(this.slideshowTimer);
+      if (!this.isSlideshowPlaying) return;
+      this.slideshowTimer = setInterval(() => {
+        this.showSlide(this.slideshowIndex + 1);
+      }, 5000);
+    }
+
+    toggleSlideshowPlay() {
+      this.isSlideshowPlaying = !this.isSlideshowPlaying;
+      const btn = document.getElementById('slideshow-play-pause-btn');
+      if (btn) {
+        btn.innerHTML = this.isSlideshowPlaying
+          ? '<i class="fa-solid fa-pause text-base"></i>'
+          : '<i class="fa-solid fa-play text-base ml-0.5"></i>';
+      }
+      if (this.isSlideshowPlaying) {
+        this.scheduleNextSlide();
+      } else if (this.slideshowTimer) {
+        clearInterval(this.slideshowTimer);
+        this.slideshowTimer = null;
+      }
+    }
+
+    prevSlide() {
+      this.showSlide(this.slideshowIndex - 1);
+      if (this.isSlideshowPlaying) this.scheduleNextSlide();
+    }
+
+    nextSlide() {
+      this.showSlide(this.slideshowIndex + 1);
+      if (this.isSlideshowPlaying) this.scheduleNextSlide();
+    }
+
     setupGlobalEvents() {
+      // Desktop Tab view buttons
       document.querySelectorAll('.view-tab-btn').forEach(btn => {
         btn.onclick = () => {
           const view = btn.getAttribute('data-view');
-          this.currentView = view;
-          document.querySelectorAll('.view-tab-btn').forEach(b => {
-            b.classList.remove('active', 'bg-rose-500', 'text-white', 'shadow-md');
-            b.classList.add('text-zinc-600', 'hover:text-rose-600');
-          });
-          btn.classList.add('active', 'bg-rose-500', 'text-white', 'shadow-md');
-          btn.classList.remove('text-zinc-600', 'hover:text-rose-600');
+          this.switchView(view);
+        };
+      });
+
+      // Mobile Bottom Nav buttons
+      document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+        btn.onclick = () => {
+          const view = btn.getAttribute('data-view');
+          const filter = btn.getAttribute('data-filter');
+          if (filter) {
+            this.currentFilter = filter;
+            this.renderCategoryPills();
+            this.syncMobileNavActive();
+            this.renderCurrentView();
+          } else if (view) {
+            this.switchView(view);
+          }
+        };
+      });
+
+      const mobileQuickAdd = document.getElementById('mobile-quick-add-btn');
+      if (mobileQuickAdd) {
+        mobileQuickAdd.onclick = () => {
+          document.getElementById('open-add-moment-btn')?.click();
+        };
+      }
+
+      // Sticky header mini counter back to top
+      const miniCounterBtn = document.getElementById('header-mini-counter');
+      if (miniCounterBtn) {
+        miniCounterBtn.onclick = () => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+      }
+
+      // Velvet / Dark Mode Toggle
+      const themeBtn = document.getElementById('theme-toggle-btn');
+      if (themeBtn) {
+        themeBtn.onclick = () => {
+          const isDark = document.body.classList.toggle('dark-theme');
+          themeBtn.innerHTML = isDark
+            ? '<i class="fa-solid fa-sun text-sm text-amber-400"></i>'
+            : '<i class="fa-solid fa-moon text-sm"></i>';
+          localStorage.setItem('love_theme', isDark ? 'dark' : 'light');
+        };
+      }
+
+      // Search Bar
+      const searchInput = document.getElementById('moment-search-input');
+      const clearSearchBtn = document.getElementById('clear-search-btn');
+      let searchTimeout = null;
+      if (searchInput) {
+        searchInput.oninput = (e) => {
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => {
+            this.searchQuery = e.target.value;
+            if (clearSearchBtn) {
+              clearSearchBtn.classList.toggle('hidden', !this.searchQuery);
+            }
+            this.renderCurrentView();
+          }, 150);
+        };
+      }
+      if (clearSearchBtn) {
+        clearSearchBtn.onclick = () => {
+          if (searchInput) searchInput.value = '';
+          this.searchQuery = '';
+          clearSearchBtn.classList.add('hidden');
           this.renderCurrentView();
         };
+      }
+
+      // Slideshow triggers
+      const startSlideshowBtn = document.getElementById('start-slideshow-btn');
+      if (startSlideshowBtn) startSlideshowBtn.onclick = () => this.startSlideshow();
+
+      const closeSlideshowBtn = document.getElementById('slideshow-close-btn');
+      if (closeSlideshowBtn) closeSlideshowBtn.onclick = () => this.stopSlideshow();
+
+      const playPauseBtn = document.getElementById('slideshow-play-pause-btn');
+      if (playPauseBtn) playPauseBtn.onclick = () => this.toggleSlideshowPlay();
+
+      const prevSlideBtn = document.getElementById('slideshow-prev-btn');
+      if (prevSlideBtn) prevSlideBtn.onclick = () => this.prevSlide();
+
+      const nextSlideBtn = document.getElementById('slideshow-next-btn');
+      if (nextSlideBtn) nextSlideBtn.onclick = () => this.nextSlide();
+
+      const slideshowMusicBtn = document.getElementById('slideshow-music-toggle');
+      if (slideshowMusicBtn) {
+        slideshowMusicBtn.onclick = () => {
+          const isPlaying = this.audio.toggle();
+          slideshowMusicBtn.classList.toggle('text-rose-500', isPlaying);
+          slideshowMusicBtn.classList.toggle('text-rose-300', !isPlaying);
+        };
+      }
+
+      // Lightbox Touch Gestures (Swipe left/right to navigate, swipe down to close)
+      let touchStartX = 0;
+      let touchStartY = 0;
+      const lightboxModal = document.getElementById('lightbox-modal');
+      if (lightboxModal) {
+        lightboxModal.addEventListener('touchstart', (e) => {
+          touchStartX = e.changedTouches[0].screenX;
+          touchStartY = e.changedTouches[0].screenY;
+        }, { passive: true });
+
+        lightboxModal.addEventListener('touchend', (e) => {
+          const diffX = e.changedTouches[0].screenX - touchStartX;
+          const diffY = e.changedTouches[0].screenY - touchStartY;
+          // Horizontal swipe
+          if (Math.abs(diffX) > 45 && Math.abs(diffX) > Math.abs(diffY)) {
+            if (diffX < 0) {
+              this.navigateLightbox(1);
+            } else {
+              this.navigateLightbox(-1);
+            }
+          } else if (diffY > 70 && Math.abs(diffY) > Math.abs(diffX)) {
+            this.closeLightbox();
+          }
+        }, { passive: true });
+      }
+
+      // Keyboard Controls for Lightbox & Slideshow
+      window.addEventListener('keydown', (e) => {
+        if (lightboxModal && !lightboxModal.classList.contains('hidden')) {
+          if (e.key === 'ArrowLeft') this.navigateLightbox(-1);
+          if (e.key === 'ArrowRight') this.navigateLightbox(1);
+          if (e.key === 'Escape') this.closeLightbox();
+        }
+        const slideshowModal = document.getElementById('slideshow-modal');
+        if (slideshowModal && !slideshowModal.classList.contains('hidden')) {
+          if (e.key === 'ArrowLeft') this.prevSlide();
+          if (e.key === 'ArrowRight') this.nextSlide();
+          if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            this.toggleSlideshowPlay();
+          }
+          if (e.key === 'Escape') this.stopSlideshow();
+        }
       });
 
       // Auto-geocoding on manual location input
@@ -1794,6 +2181,18 @@
         await this.saveSettings();
       };
 
+      // Logout and reset remember-device
+      const logoutLockBtn = document.getElementById('logout-lock-btn');
+      if (logoutLockBtn) {
+        logoutLockBtn.onclick = () => {
+          if (confirm('Заблокировать сайт и выйти? При следующем входе снова потребуется ввести PIN-код.')) {
+            localStorage.removeItem('love_app_remember_device');
+            sessionStorage.removeItem('app_unlocked');
+            window.location.reload();
+          }
+        };
+      }
+
       document.getElementById('export-backup-btn').onclick = () => this.storage.exportBackup();
       const backupFileInput = document.getElementById('import-backup-input');
       document.getElementById('import-backup-btn').onclick = () => backupFileInput.click();
@@ -1877,6 +2276,8 @@
 
         // Extract EXIF data (Date & GPS)
         const exifData = await this.exifEngine.extractMetadata(file);
+        let detectedCity = null;
+
         if (exifData && exifData.hasExif) {
           const detectedMessages = [];
 
@@ -1892,6 +2293,7 @@
             const placeName = await this.exifEngine.reverseGeocode(exifData.gps.lat, exifData.gps.lng);
             if (placeName) {
               document.getElementById('moment-location-input').value = placeName;
+              detectedCity = placeName.split(',')[0].trim();
               detectedMessages.push(`Локация: ${placeName}`);
             }
           }
@@ -1899,6 +2301,16 @@
           if (detectedMessages.length > 0 && exifBadge && exifText) {
             exifText.innerText = `Определено по снимку: ${detectedMessages.join(' • ')}`;
             exifBadge.classList.remove('hidden');
+          }
+        }
+
+        // Auto-suggest title if empty
+        const titleInp = document.getElementById('moment-title-input');
+        if (titleInp && !titleInp.value.trim()) {
+          if (detectedCity) {
+            titleInp.value = `Прогулка в ${detectedCity}`;
+          } else {
+            titleInp.value = 'Наш прекрасный день';
           }
         }
       } catch (err) {

@@ -95,6 +95,13 @@
         </button>
       </div>
 
+      <div class="mt-4 mb-3">
+        <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-zinc-600 select-none hover:text-rose-600 transition-colors">
+          <input type="checkbox" id="remember-device-checkbox" checked class="w-4 h-4 rounded text-rose-500 border-rose-300 focus:ring-rose-400 accent-rose-500 cursor-pointer">
+          <span>Запомнить на этом устройстве</span>
+        </label>
+      </div>
+
       <p class="text-[11px] text-zinc-400">
         Подсказка: день нашего начала (21.12 &rarr; 2112)
       </p>
@@ -102,7 +109,7 @@
   </div>
 
   <!-- ==================== MAIN APPLICATION CONTENT ==================== -->
-  <div id="main-content" class="hidden min-h-screen relative z-10 flex flex-col pb-20">
+  <div id="main-content" class="hidden min-h-screen relative z-10 flex flex-col pb-24 sm:pb-20">
     
     <!-- Top Navigation Header -->
     <header class="sticky top-0 z-40 backdrop-blur-md bg-[#FAF7F5]/85 border-b border-rose-100/80 transition-all">
@@ -117,11 +124,17 @@
             <h2 class="font-serif-romantic font-bold text-xl text-zinc-800 leading-tight">
               Наша История
             </h2>
-            <p class="text-[11px] text-rose-500 font-medium">с 21 декабря 2024</p>
+            <p id="header-subtitle" class="text-[11px] text-rose-500 font-medium">с 21 декабря 2024</p>
           </div>
         </div>
 
-        <!-- Controls (Sound, Petals, Settings, Cloud status) -->
+        <!-- Sticky Mini Counter Badge (appears when scrolled down past hero) -->
+        <button id="header-mini-counter" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold shadow-xs transition-all cursor-pointer" title="Нажмите, чтобы вернуться к началу">
+          <i class="fa-solid fa-heart text-rose-500 text-[10px] animate-pulse"></i>
+          <span id="header-mini-counter-text">Вместе...</span>
+        </button>
+
+        <!-- Controls (Sound, Petals, Theme, Settings, Cloud status) -->
         <div class="flex items-center gap-2">
           <!-- Cloud status badge -->
           <div id="cloud-sync-status" class="hidden sm:block"></div>
@@ -152,6 +165,15 @@
             title="Эффект лепестков"
           >
             <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+          </button>
+
+          <!-- Velvet Theme Toggle -->
+          <button 
+            id="theme-toggle-btn" 
+            class="w-10 h-10 rounded-full bg-white/80 hover:bg-rose-50 border border-rose-100 text-zinc-700 flex items-center justify-center transition-all shadow-sm"
+            title="Ночной режим"
+          >
+            <i class="fa-solid fa-moon text-sm"></i>
           </button>
 
           <!-- Settings Button -->
@@ -232,8 +254,31 @@
         </div>
       </section>
 
+      <!-- ==================== FLASHBACK / MEMORY OF THE DAY WIDGET ==================== -->
+      <section id="flashback-widget" class="hidden mb-6 p-4 rounded-3xl bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-amber-500/10 border border-rose-200/80 shadow-xs relative overflow-hidden transition-all">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div id="flashback-thumb" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden shrink-0 bg-rose-100 border-2 border-white shadow-sm cursor-pointer group">
+              <img id="flashback-img" src="" alt="Flashback" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 text-[11px] text-rose-600 font-bold uppercase tracking-wider mb-0.5">
+                <i class="fa-solid fa-sparkles text-[10px]"></i>
+                <span id="flashback-badge-text">Воспоминание дня</span>
+              </div>
+              <h4 id="flashback-title" class="font-serif-romantic font-bold text-zinc-800 text-sm sm:text-lg truncate"></h4>
+              <p id="flashback-date" class="text-xs text-zinc-500 truncate mt-0.5"></p>
+            </div>
+          </div>
+          <button id="flashback-open-btn" class="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-100 font-semibold text-xs shrink-0 shadow-xs transition-all flex items-center gap-1.5 active:scale-95">
+            <span>Вспомнить</span>
+            <i class="fa-solid fa-arrow-right text-[10px]"></i>
+          </button>
+        </div>
+      </section>
+
       <!-- ==================== VIEW SWITCHER & ADD BUTTON ==================== -->
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-5">
         
         <!-- View Tabs -->
         <div class="inline-flex p-1.5 rounded-2xl bg-white/80 border border-rose-100 shadow-sm self-start sm:self-auto overflow-x-auto max-w-full">
@@ -261,11 +306,39 @@
         </button>
       </div>
 
-      <!-- ==================== CATEGORY FILTER BAR ==================== -->
-      <section id="filter-section" class="mb-8">
-        <div id="category-pills" class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <!-- ==================== FILTER & SEARCH BAR ==================== -->
+      <section id="filter-section" class="mb-6 space-y-3">
+        <!-- Quick Search & Actions Bar -->
+        <div class="flex items-center gap-2.5">
+          <div class="relative flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs"></i>
+            <input 
+              type="text" 
+              id="moment-search-input" 
+              placeholder="Поиск по воспоминаниям, городам, историям..." 
+              class="w-full pl-9 pr-8 py-2 rounded-2xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-xs sm:text-sm shadow-xs transition-all"
+            >
+            <button id="clear-search-btn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-1">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+
+          <!-- Slideshow Button -->
+          <button 
+            id="start-slideshow-btn" 
+            class="px-3.5 py-2 rounded-2xl bg-white/80 hover:bg-rose-50 border border-rose-100 text-rose-600 font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-xs transition-all shrink-0 active:scale-95"
+            title="Запустить романтическое слайд-шоу воспоминаний"
+          >
+            <i class="fa-solid fa-film text-rose-500"></i>
+            <span class="hidden sm:inline">Слайд-шоу</span>
+          </button>
+        </div>
+
+        <!-- Category Pills -->
+        <div id="category-pills" class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <!-- Populated by JS -->
         </div>
+      </section>
       </section>
 
       <!-- ==================== VIEW 1: TIMELINE ==================== -->
@@ -359,19 +432,64 @@
       </section>
 
     </main>
+
+    <!-- ==================== MOBILE FLOATING BOTTOM NAV BAR ==================== -->
+    <nav id="mobile-bottom-nav" class="sm:hidden fixed bottom-3 left-3 right-3 z-40 glass-card rounded-2xl px-2 py-2 flex items-center justify-around shadow-xl border border-rose-200/80 backdrop-blur-xl">
+      <button class="mobile-nav-btn active flex flex-col items-center gap-1 text-rose-600 transition-colors" data-view="timeline">
+        <i class="fa-solid fa-timeline text-base"></i>
+        <span class="text-[10px] font-semibold">Лента</span>
+      </button>
+      <button class="mobile-nav-btn flex flex-col items-center gap-1 text-zinc-400 hover:text-rose-600 transition-colors" data-view="gallery">
+        <i class="fa-solid fa-border-all text-base"></i>
+        <span class="text-[10px] font-semibold">Галерея</span>
+      </button>
+      <button id="mobile-quick-add-btn" class="-mt-6 w-12 h-12 rounded-full bg-gradient-to-tr from-rose-500 to-pink-500 text-white flex items-center justify-center shadow-lg shadow-rose-500/35 border-2 border-white active:scale-95 transition-all" title="Добавить фото">
+        <i class="fa-solid fa-plus text-base"></i>
+      </button>
+      <button class="mobile-nav-btn flex flex-col items-center gap-1 text-zinc-400 hover:text-rose-600 transition-colors" data-view="map">
+        <i class="fa-solid fa-compass text-base"></i>
+        <span class="text-[10px] font-semibold">Атлас</span>
+      </button>
+      <button class="mobile-nav-btn flex flex-col items-center gap-1 text-zinc-400 hover:text-rose-600 transition-colors" data-filter="❤️ Любимые">
+        <i class="fa-solid fa-heart text-base"></i>
+        <span class="text-[10px] font-semibold">Любимые</span>
+      </button>
+    </nav>
   </div>
 
   <!-- ==================== MODAL: ADD MOMENT ==================== -->
   <div id="add-moment-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
     <div class="glass-card max-w-lg w-full rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto shadow-2xl border border-rose-100 relative">
       
-      <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center justify-between mb-4">
         <h3 class="text-2xl font-serif-romantic font-bold text-zinc-800">
           Новое воспоминание
         </h3>
         <button id="close-add-moment-btn" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-colors">
           <i class="fa-solid fa-xmark text-sm"></i>
         </button>
+      </div>
+
+      <!-- Telegram Quick Tip Banner -->
+      <div class="mb-4 p-3 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="w-8 h-8 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <i class="fa-brands fa-telegram text-sm"></i>
+          </span>
+          <div class="min-w-0">
+            <p class="text-xs font-semibold text-sky-950 leading-tight">Быстрее с телефона через Telegram</p>
+            <p class="text-[10px] text-sky-700/80 truncate">Перешлите фото боту — он сам считает геометку и дату!</p>
+          </div>
+        </div>
+        <a 
+          href="https://t.me/datingstorybot" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          class="px-2.5 py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-700 border border-sky-200 text-xs font-semibold shrink-0 shadow-xs transition-colors flex items-center gap-1 active:scale-95"
+        >
+          <span>В бот</span>
+          <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+        </a>
       </div>
 
       <form id="add-moment-form" class="space-y-4">
@@ -416,8 +534,7 @@
           <input 
             type="text" 
             id="moment-title-input" 
-            required 
-            placeholder="Например: Прогулка под дождём" 
+            placeholder="Например: Прогулка под дождём (или оставьте пустым)" 
             class="w-full px-4 py-2.5 rounded-xl border border-rose-100 bg-white/80 focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm"
           >
         </div>
@@ -627,6 +744,21 @@
           </button>
         </div>
       </div>
+
+      <hr class="border-rose-100 my-4">
+
+      <!-- Lock & Security -->
+      <div>
+        <label class="block text-xs font-semibold text-zinc-700 mb-2">Безопасность устройства</label>
+        <button 
+          type="button" 
+          id="logout-lock-btn" 
+          class="w-full py-2.5 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors active:scale-98"
+        >
+          <i class="fa-solid fa-lock text-rose-500"></i>
+          <span>Заблокировать и сбросить авто-вход</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -667,6 +799,57 @@
       <!-- Photobook Spreads Scrollable Container -->
       <div id="photobook-preview-container" class="flex-1 overflow-y-auto space-y-8 p-2 sm:p-4 rounded-2xl bg-zinc-100/60 border border-zinc-200/60">
         <!-- Spreads rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: FULLSCREEN SLIDESHOW ==================== -->
+  <div id="slideshow-modal" class="fixed inset-0 z-50 hidden flex-col items-center justify-between bg-black/95 text-white p-4 sm:p-6 backdrop-blur-xl select-none">
+    <!-- Top Bar -->
+    <div class="w-full flex items-center justify-between z-20">
+      <div class="flex items-center gap-2.5">
+        <span class="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs shadow-sm">
+          <i class="fa-solid fa-film"></i>
+        </span>
+        <span class="text-xs sm:text-sm font-semibold tracking-wide">Фильм наших воспоминаний</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="slideshow-music-toggle" class="p-2 text-rose-300 hover:text-white transition-colors" title="Музыка">
+          <i class="fa-solid fa-music"></i>
+        </button>
+        <button id="slideshow-close-btn" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Center Image Slide -->
+    <div class="relative w-full max-w-4xl flex-1 flex items-center justify-center overflow-hidden my-4">
+      <img id="slideshow-img" src="" alt="Slideshow" class="max-w-full max-h-[72vh] object-contain rounded-2xl shadow-2xl transition-all duration-700 transform scale-100">
+      <div id="slideshow-caption" class="absolute bottom-4 left-4 right-4 text-center bg-black/65 backdrop-blur-md p-4 rounded-2xl max-w-lg mx-auto border border-white/10">
+        <h3 id="slideshow-title" class="font-serif-romantic text-xl sm:text-2xl font-bold"></h3>
+        <p id="slideshow-meta" class="text-xs text-rose-300 mt-0.5"></p>
+        <p id="slideshow-desc" class="text-xs text-zinc-300 mt-1 italic line-clamp-2"></p>
+      </div>
+    </div>
+
+    <!-- Bottom Controls & Progress Bar -->
+    <div class="w-full max-w-xl z-20 space-y-3">
+      <!-- Progress Bar -->
+      <div class="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+        <div id="slideshow-progress" class="h-full bg-gradient-to-r from-rose-500 to-pink-500 w-0 transition-all duration-300"></div>
+      </div>
+      <!-- Controls -->
+      <div class="flex items-center justify-center gap-6">
+        <button id="slideshow-prev-btn" class="text-zinc-400 hover:text-white transition-colors p-2">
+          <i class="fa-solid fa-backward-step text-lg"></i>
+        </button>
+        <button id="slideshow-play-pause-btn" class="w-12 h-12 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg shadow-rose-500/30 transition-all active:scale-95">
+          <i class="fa-solid fa-pause text-base"></i>
+        </button>
+        <button id="slideshow-next-btn" class="text-zinc-400 hover:text-white transition-colors p-2">
+          <i class="fa-solid fa-forward-step text-lg"></i>
+        </button>
       </div>
     </div>
   </div>
