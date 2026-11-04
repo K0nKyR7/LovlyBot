@@ -298,33 +298,76 @@
       <!-- ==================== VIEW 3: INTERACTIVE MAP ==================== -->
       <section id="map-view" class="hidden">
         <!-- Stats Banner -->
-        <div class="glass-card rounded-2xl p-4 mb-4 border border-rose-100 flex flex-wrap items-center justify-between gap-4 text-xs sm:text-sm">
+        <div class="glass-card rounded-2xl p-4 mb-4 border border-rose-100 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs sm:text-sm">
           <div class="flex items-center gap-2">
-            <span class="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+            <span class="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
               <i class="fa-solid fa-map-pin"></i>
             </span>
             <div>
-              <span class="text-zinc-500 block text-[11px]">Отмечено локаций</span>
+              <span class="text-zinc-500 block text-[11px]">Отмечено мест</span>
               <span id="map-stats-places" class="font-bold text-zinc-800 text-base">0</span>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <span class="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+            <span class="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
               <i class="fa-solid fa-city"></i>
             </span>
             <div>
-              <span class="text-zinc-500 block text-[11px]">Городов посещено</span>
+              <span class="text-zinc-500 block text-[11px]">Городов и стран</span>
               <span id="map-stats-cities" class="font-bold text-zinc-800 text-base">0</span>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <span class="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+            <span class="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
               <i class="fa-solid fa-camera"></i>
             </span>
             <div>
               <span class="text-zinc-500 block text-[11px]">Фото с геометкой</span>
               <span id="map-stats-photos" class="font-bold text-zinc-800 text-base">0</span>
             </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
+              <i class="fa-solid fa-route"></i>
+            </span>
+            <div>
+              <span class="text-zinc-500 block text-[11px]">Пройдено вместе</span>
+              <span id="map-stats-distance" class="font-bold text-rose-600 text-base">0 км</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Map Controls Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <!-- Category Filter Pills -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+            <button class="map-cat-btn active px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500 text-white shadow-sm transition-all" data-category="all">
+              Все
+            </button>
+            <button class="map-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 hover:bg-rose-50 text-zinc-600 border border-rose-100 transition-all" data-category="Свидания">
+              🥂 Свидания
+            </button>
+            <button class="map-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 hover:bg-rose-50 text-zinc-600 border border-rose-100 transition-all" data-category="Путешествия">
+              ✈️ Путешествия
+            </button>
+            <button class="map-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 hover:bg-rose-50 text-zinc-600 border border-rose-100 transition-all" data-category="Уютные дни">
+              ☕ Уютные дни
+            </button>
+            <button class="map-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 hover:bg-rose-50 text-zinc-600 border border-rose-100 transition-all" data-category="Памятные даты">
+              🎉 Памятные даты
+            </button>
+          </div>
+
+          <!-- Action Buttons: Route & Recenter -->
+          <div class="flex items-center gap-2 ml-auto">
+            <button id="map-toggle-route-btn" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 transition-all flex items-center gap-1.5 shadow-sm active:scale-95" title="Соединить воспоминания линией путешествий">
+              <i class="fa-solid fa-route"></i>
+              <span>Маршрут</span>
+            </button>
+            <button id="map-recenter-btn" class="px-3 py-1.5 rounded-xl text-xs font-semibold border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 transition-all flex items-center gap-1.5 shadow-sm active:scale-95" title="Показать все точки на карте">
+              <i class="fa-solid fa-expand"></i>
+              <span>Охват</span>
+            </button>
           </div>
         </div>
 

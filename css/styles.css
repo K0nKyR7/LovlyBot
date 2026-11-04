@@ -171,6 +171,24 @@ body {
   background: white;
 }
 
+/* Animated Romantic Route Line */
+@keyframes routeDash {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+.romantic-route-line {
+  stroke-dasharray: 8, 8;
+  animation: routeDash 2.5s linear infinite;
+  filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.5));
+}
+#map-toggle-route-btn.active {
+  background-color: #f43f5e;
+  color: white;
+  border-color: #f43f5e;
+  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);
+}
+
 /* Photobook Print Engine */
 .photobook-page {
   page-break-after: always;

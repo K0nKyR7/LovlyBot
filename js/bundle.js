@@ -879,9 +879,14 @@
       this.containerId = containerId;
       this.map = null;
       this.markersGroup = null;
+      this.routeLayer = null;
       this.onMomentClick = onMomentClick;
       this.isInitialized = false;
+      this.showRoute = false;
+      this.activeCategory = 'all';
+      this.allMoments = [];
     }
+
     init() {
       if (this.isInitialized || !document.getElementById(this.containerId)) return;
       if (typeof L === 'undefined') return;
@@ -900,6 +905,19 @@
       this.markersGroup = L.layerGroup().addTo(this.map);
       this.isInitialized = true;
     }
+
+    calculateDistanceKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
     createHeartIcon() {
       return L.divIcon({
         className: 'custom-map-heart-marker',
@@ -916,16 +934,79 @@
         popupAnchor: [0, -46]
       });
     }
+
+    setCategory(category) {
+      this.activeCategory = category;
+      this.renderMoments(this.allMoments);
+    }
+
+    toggleRoute() {
+      this.showRoute = !this.showRoute;
+      this.renderMoments(this.allMoments);
+      return this.showRoute;
+    }
+
+    fitAll() {
+      if (!this.map) return;
+      const withCoords = this.getFiltered(this.allMoments);
+      const bounds = withCoords.map(m => [m.lat, m.lng]);
+      if (bounds.length > 0) {
+        this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      }
+    }
+
+    getFiltered(moments) {
+      let withCoords = (moments || []).filter(m => m.lat && m.lng);
+      if (this.activeCategory && this.activeCategory !== 'all') {
+        withCoords = withCoords.filter(m => m.category === this.activeCategory);
+      }
+      return withCoords;
+    }
+
     renderMoments(moments) {
+      this.allMoments = moments || [];
       if (!this.map) this.init();
       if (!this.map || !this.markersGroup) return;
 
       this.markersGroup.clearLayers();
-      const momentsWithCoords = moments.filter(m => m.lat && m.lng);
-      if (momentsWithCoords.length === 0) return;
+      if (this.routeLayer) {
+        this.map.removeLayer(this.routeLayer);
+        this.routeLayer = null;
+      }
+
+      const filtered = this.getFiltered(this.allMoments);
+
+      // Calculate total distance & stats across all coordinated moments
+      const sortedChronological = [...this.allMoments.filter(m => m.lat && m.lng)].sort((a, b) => new Date(a.date) - new Date(b.date));
+      let totalDistance = 0;
+      for (let i = 0; i < sortedChronological.length - 1; i++) {
+        totalDistance += this.calculateDistanceKm(
+          sortedChronological[i].lat, sortedChronological[i].lng,
+          sortedChronological[i + 1].lat, sortedChronological[i + 1].lng
+        );
+      }
+
+      const distEl = document.getElementById('map-stats-distance');
+      if (distEl) {
+        distEl.innerText = totalDistance > 0 ? `${Math.round(totalDistance).toLocaleString('ru-RU')} км` : '0 км';
+      }
+
+      // Draw Route Polyline if active
+      if (this.showRoute && sortedChronological.length > 1) {
+        const routeCoords = sortedChronological.map(m => [m.lat, m.lng]);
+        this.routeLayer = L.polyline(routeCoords, {
+          color: '#f43f5e',
+          weight: 4,
+          opacity: 0.9,
+          className: 'romantic-route-line',
+          dashArray: '8, 8'
+        }).addTo(this.map);
+      }
+
+      if (filtered.length === 0) return;
 
       const bounds = [];
-      momentsWithCoords.forEach(moment => {
+      filtered.forEach(moment => {
         const latLng = [moment.lat, moment.lng];
         bounds.push(latLng);
         const marker = L.marker(latLng, { icon: this.createHeartIcon() });
@@ -951,10 +1032,12 @@
         });
         this.markersGroup.addLayer(marker);
       });
+
       if (bounds.length > 0) {
         this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
       }
     }
+
     invalidateSize() {
       if (this.map) setTimeout(() => this.map.invalidateSize(), 200);
     }
@@ -1440,6 +1523,69 @@
           this.renderCurrentView();
         };
       });
+
+      // Map controls: Route toggle, Recenter, Category filters
+      const routeToggleBtn = document.getElementById('map-toggle-route-btn');
+      if (routeToggleBtn) {
+        routeToggleBtn.onclick = () => {
+          const isActive = this.mapEngine.toggleRoute();
+          if (isActive) {
+            routeToggleBtn.classList.add('active');
+          } else {
+            routeToggleBtn.classList.remove('active');
+          }
+        };
+      }
+
+      const mapRecenterBtn = document.getElementById('map-recenter-btn');
+      if (mapRecenterBtn) {
+        mapRecenterBtn.onclick = () => {
+          this.mapEngine.fitAll();
+        };
+      }
+
+      document.querySelectorAll('.map-cat-btn').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('.map-cat-btn').forEach(b => {
+            b.classList.remove('active', 'bg-rose-500', 'text-white', 'shadow-sm');
+            b.classList.add('bg-white/80', 'text-zinc-600', 'border', 'border-rose-100');
+          });
+          btn.classList.add('active', 'bg-rose-500', 'text-white', 'shadow-sm');
+          btn.classList.remove('bg-white/80', 'text-zinc-600', 'border', 'border-rose-100');
+          const cat = btn.getAttribute('data-category');
+          this.mapEngine.setCategory(cat);
+        };
+      });
+
+      // Auto-geocoding on manual location input
+      const locInput = document.getElementById('moment-location-input');
+      const latInput = document.getElementById('moment-lat-input');
+      const lngInput = document.getElementById('moment-lng-input');
+      const exifBadge = document.getElementById('exif-detected-badge');
+      const exifText = document.getElementById('exif-detected-text');
+
+      if (locInput) {
+        locInput.addEventListener('change', async () => {
+          const val = locInput.value.trim();
+          if (val && !latInput.value) {
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=1&accept-language=ru`, {
+                headers: { 'User-Agent': 'LoveStoryApp/1.0 (love-story@pair.local)' }
+              });
+              const data = await res.json();
+              if (data && data.length > 0) {
+                latInput.value = data[0].lat;
+                lngInput.value = data[0].lon;
+                if (exifBadge && exifText) {
+                  const shortName = data[0].display_name.split(',').slice(0, 2).join(', ');
+                  exifText.innerText = `📍 Координаты определены: ${shortName}`;
+                  exifBadge.classList.remove('hidden');
+                }
+              }
+            } catch (e) {}
+          }
+        });
+      }
 
       const musicBtn = document.getElementById('music-toggle-btn');
       if (musicBtn) {
