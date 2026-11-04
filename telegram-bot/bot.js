@@ -37,7 +37,6 @@ const START_DATE = new Date('2024-12-21T00:00:00');
 const TG_API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : '';
 
 // Хранилища состояния
-const pendingUploads = new Map();
 const lastUserMoments = new Map();  // userId -> { momentId, title, timestamp }
 const userState = new Map();        // userId -> { state: 'AWAITING_LOCATION', momentId }
 const mediaGroupQueue = new Map();  // mediaGroupId -> { timer, items: [], chatId, userId, caption }
@@ -135,7 +134,7 @@ async function saveMomentToSupabase(moment) {
 // Обновление геопозиции момента в Supabase
 async function updateMomentLocation(momentId, lat, lng, location) {
   if (SUPABASE_URL && SUPABASE_KEY) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/moments?id=eq.${momentId}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/moments?id=eq.${encodeURIComponent(momentId)}`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -388,7 +387,7 @@ async function handleMessage(msg) {
       `• Отправь любое <b>фото</b> с прогулки, ужина или поездки — я сохраню его на сайт.\n` +
       `• Отправь <b>альбом из нескольких фото</b> — я объединю их аккуратно.\n` +
       `• Отправь фото <b>как файл/документ</b> — я сам считаю GPS и дату из метаданных!\n` +
-      `• Отправь <b>геопозицию (📎 ➔ Геопозиция)</b> — поставлю пульсирующее сердечко на карте.\n` +
+      `• Отправь <b>геопозицию (📎 ➔ Геопозиция)</b> — я прикреплю её к моменту в Атласе мест на сайте.\n` +
       `• Отправь <b>голосовое сообщение 🎤</b> — я сохраню аудио-послание в архив!\n\n` +
       `✨ <b>Команды:</b>\n` +
       `• /reasons — 100 причин, почему я тебя люблю 💖\n` +
@@ -519,7 +518,7 @@ async function handleMessage(msg) {
       );
     }
 
-    await sendMessage(chatId, '🔍 Определяю адрес и ставлю отметку на карте...');
+    await sendMessage(chatId, '🔍 Определяю адрес и прикрепляю локацию...');
     const placeName = await reverseGeocode(latitude, longitude);
     await updateMomentLocation(targetMomentId, latitude, longitude, placeName);
     userState.delete(userId);
@@ -529,7 +528,7 @@ async function handleMessage(msg) {
       `📍 <b>Геопозиция успешно прикреплена!</b>\n\n` +
       `Место: <b>${placeName}</b>\n` +
       `Координаты: <code>${latitude.toFixed(4)}, ${longitude.toFixed(4)}</code>\n\n` +
-      `На карте сайта появилось пульсирующее сердечко 💖`
+      `В Атласе мест на сайте появилась романтическая карточка с маршрутом 💖`
     );
   }
 
@@ -538,7 +537,7 @@ async function handleMessage(msg) {
     const { momentId } = userState.get(userId);
     userState.delete(userId);
 
-    await sendMessage(chatId, `🔍 Ищу на карте «${text}»...`);
+    await sendMessage(chatId, `🔍 Ищу «${text}»...`);
     const geo = await forwardGeocode(text);
 
     if (geo) {
@@ -548,7 +547,7 @@ async function handleMessage(msg) {
         `📍 <b>Локация найдена и прикреплена!</b>\n\n` +
         `Отметка: <b>${geo.displayName}</b>\n` +
         `Координаты: <code>${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}</code>\n\n` +
-        `Сердечко на карте обновлено! 💖`
+        `В Атласе мест на сайте появилась романтическая карточка с маршрутом 💖`
       );
     } else {
       await updateMomentLocation(momentId, null, null, text);
@@ -671,7 +670,6 @@ async function processSinglePhoto(msg, isDocImage) {
       await saveMomentToSupabase(moment);
     }
 
-    pendingUploads.set(momentId, moment);
     lastUserMoments.set(userId, { momentId, title: moment.title, timestamp: Date.now() });
 
     let locationInfoText = '';
@@ -787,12 +785,21 @@ async function handleCallbackQuery(query) {
   const messageId = query.message.message_id;
   const data = query.data || '';
 
+  // 1. Проверка прав доступа для инлайн-кнопок
+  if (!isAllowed(userId)) {
+    return tg('answerCallbackQuery', {
+      callback_query_id: query.id,
+      text: '🔒 Этот бот является приватным архивом пары. Доступ ограничен.',
+      show_alert: true
+    });
+  }
+
   // Смена категории
   if (data.startsWith('cat:')) {
     const [, momentId, category] = data.split(':');
     try {
       if (SUPABASE_URL && SUPABASE_KEY) {
-        await fetch(`${SUPABASE_URL}/rest/v1/moments?id=eq.${momentId}`, {
+        await fetch(`${SUPABASE_URL}/rest/v1/moments?id=eq.${encodeURIComponent(momentId)}`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${SUPABASE_KEY}`,
@@ -835,7 +842,7 @@ async function handleCallbackQuery(query) {
       `📍 <b>Где было сделано это фото?</b>\n\n` +
       `1. Напиши город или место прямо сюда в чат (например: <i>Сочи</i> или <i>Москва, Красная площадь</i>)\n` +
       `2. Или отправь геопозицию через скрепку: 📎 ➔ «Геопозиция».\n\n` +
-      `Я сам определю координаты и поставлю пульсирующее сердечко на карте! 💖`
+      `Я сам определю координаты и прикреплю отметку к вашей истории! 💖`
     );
   }
 }
@@ -850,7 +857,10 @@ async function pollUpdates() {
       timeout: 25
     });
 
-    if (res.ok && res.result && res.result.length > 0) {
+    if (!res || !res.ok) {
+      console.warn('Telegram getUpdates предупреждение/ошибка:', res?.error_code, res?.description || 'Сетевой сбой');
+      await new Promise(r => setTimeout(r, 3000));
+    } else if (res.result && res.result.length > 0) {
       for (const update of res.result) {
         lastUpdateId = update.update_id;
         if (update.message) {

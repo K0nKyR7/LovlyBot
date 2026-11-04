@@ -393,6 +393,9 @@
         clearTimeout(this.timer);
         this.timer = null;
       }
+      if (this.ctx && this.ctx.state === 'running') {
+        this.ctx.suspend().catch(() => {});
+      }
     }
     toggle() {
       if (this.isPlaying) {
@@ -541,7 +544,20 @@
             .from('moments')
             .select('*')
             .order('date', { ascending: false });
-          if (!error && data && data.length > 0) return data;
+          if (!error && Array.isArray(data)) {
+            // Кэшируем полученные моменты в локальный IndexedDB для мгновенной работы и офлайна
+            const remoteIds = new Set(data.map(m => m.id));
+            const localMoments = await this.getAllFromStore(STORE_MOMENTS);
+            for (const lm of localMoments) {
+              if (['moment-1', 'moment-2', 'moment-3', 'moment-4', 'moment-5'].includes(lm.id) && !remoteIds.has(lm.id)) {
+                await this.deleteFromStore(STORE_MOMENTS, lm.id);
+              }
+            }
+            for (const m of data) {
+              await this.putToStore(STORE_MOMENTS, m);
+            }
+            return data;
+          }
         } catch (err) {
           console.warn('Supabase fetch fallback to local:', err);
         }
@@ -589,8 +605,19 @@
     }
 
     async toggleLike(id) {
-      const moments = await this.getAllFromStore(STORE_MOMENTS);
-      const moment = moments.find((m) => m.id === id);
+      let moments = await this.getAllFromStore(STORE_MOMENTS);
+      let moment = moments.find((m) => m.id === id);
+
+      // Если момент пришел из Telegram и еще не был в IndexedDB, запрашиваем из Supabase
+      if (!moment && this.supabaseClient) {
+        try {
+          const { data } = await this.supabaseClient.from('moments').select('*').eq('id', id).maybeSingle();
+          if (data) {
+            moment = data;
+            await this.putToStore(STORE_MOMENTS, moment);
+          }
+        } catch (e) {}
+      }
       if (!moment) return null;
 
       moment.isLiked = !moment.isLiked;
@@ -616,7 +643,8 @@
         try {
           await this.supabaseClient.from('moments').delete().eq('id', id);
           if (moment && moment.imageUrl && moment.imageUrl.includes('/storage/v1/object/public/photos/')) {
-            const fileName = moment.imageUrl.split('/storage/v1/object/public/photos/').pop();
+            const rawName = moment.imageUrl.split('/storage/v1/object/public/photos/').pop();
+            const fileName = rawName ? decodeURIComponent(rawName.split('?')[0]) : null;
             if (fileName) {
               await this.supabaseClient.storage.from('photos').remove([fileName]);
             }
@@ -685,13 +713,13 @@
             <i class="fa-solid fa-microphone text-2xl"></i>
           </div>
           <h4 class="font-serif-romantic text-xl font-bold mb-2">${escapeHtml(moment.title)}</h4>
-          <audio controls class="w-full max-w-md accent-rose-600 rounded-xl mt-2" src="${moment.imageUrl}"></audio>
+          <audio controls class="w-full max-w-md accent-rose-600 rounded-xl mt-2" src="${escapeHtml(moment.imageUrl)}"></audio>
         </div>
       `;
     } else {
       mediaContent = `
         <div class="relative overflow-hidden aspect-[16/10] sm:aspect-[16/9] bg-rose-50 cursor-pointer moment-image-trigger" data-id="${moment.id}">
-          <img src="${moment.imageUrl}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+          <img src="${escapeHtml(moment.imageUrl)}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
           <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 opacity-60"></div>
           <div class="absolute top-3 left-3 flex flex-wrap gap-2">
             <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-white/90 backdrop-blur-md text-rose-700 shadow-sm">
@@ -767,7 +795,7 @@
 
     return `
       <div class="masonry-item relative group rounded-2xl overflow-hidden shadow-sm glass-card border border-rose-100 cursor-pointer moment-image-trigger" data-id="${moment.id}">
-        <img src="${moment.imageUrl}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500" />
+        <img src="${escapeHtml(moment.imageUrl)}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-4 text-white">
           <div class="flex justify-between items-center">
             <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-white/20 backdrop-blur-md">
@@ -1052,7 +1080,7 @@
                 data-id="${m.id}"
                 title="Нажмите, чтобы открыть фото во весь экран"
               >
-                <img src="${m.imageUrl}" alt="${escapeHtml(m.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                <img src="${escapeHtml(m.imageUrl)}" alt="${escapeHtml(m.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                   <i class="fa-solid fa-expand text-xs"></i>
                 </div>
@@ -1203,7 +1231,7 @@
             <div class="flex flex-col h-full justify-between bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden relative">
               <div>
                 <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm relative group">
-                  <img src="${m1.imageUrl}" alt="${escapeHtml(m1.title)}" class="w-full h-full object-cover" />
+                  <img src="${escapeHtml(m1.imageUrl)}" alt="${escapeHtml(m1.title)}" class="w-full h-full object-cover" />
                   <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-rose-600 backdrop-blur-sm shadow-xs">${escapeHtml(m1.category || 'Воспоминание')}</span>
                 </div>
                 <div class="flex items-center justify-between text-xs text-rose-600 font-medium mb-1">
@@ -1222,7 +1250,7 @@
               <div class="flex flex-col h-full justify-between bg-[#FAF7F5] rounded-2xl p-5 border border-rose-100/60 overflow-hidden relative">
                 <div>
                   <div class="aspect-[16/11] rounded-xl overflow-hidden mb-4 bg-zinc-100 shadow-sm relative group">
-                    <img src="${m2.imageUrl}" alt="${escapeHtml(m2.title)}" class="w-full h-full object-cover" />
+                    <img src="${escapeHtml(m2.imageUrl)}" alt="${escapeHtml(m2.title)}" class="w-full h-full object-cover" />
                     <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/90 text-rose-600 backdrop-blur-sm shadow-xs">${escapeHtml(m2.category || 'Воспоминание')}</span>
                   </div>
                   <div class="flex items-center justify-between text-xs text-rose-600 font-medium mb-1">
@@ -1279,6 +1307,8 @@
       this.currentPinInput = '';
       this.correctPin = INITIAL_CONFIG.defaultPin;
       this.isUnlocked = false;
+      this.failedPinAttempts = 0;
+      this.lockoutUntil = 0;
       this.counter = null;
       this.petals = null;
       this.audio = new AmbientAudio();
@@ -1319,6 +1349,11 @@
       const keypadBtns = document.querySelectorAll('.keypad-btn');
       keypadBtns.forEach(btn => {
         btn.onclick = () => {
+          if (Date.now() < this.lockoutUntil) {
+            const sec = Math.ceil((this.lockoutUntil - Date.now()) / 1000);
+            alert(`Ввод заблокирован из-за неверных попыток. Подождите ${sec} сек.`);
+            return;
+          }
           const val = btn.getAttribute('data-val');
           if (val === 'back') {
             this.currentPinInput = this.currentPinInput.slice(0, -1);
@@ -1336,6 +1371,7 @@
 
       window.onkeydown = (e) => {
         if (this.isUnlocked) return;
+        if (Date.now() < this.lockoutUntil) return;
         if (e.key >= '0' && e.key <= '9') {
           if (this.currentPinInput.length < 4) {
             this.currentPinInput += e.key;
@@ -1363,12 +1399,30 @@
     }
 
     verifyPin() {
+      if (Date.now() < this.lockoutUntil) {
+        const sec = Math.ceil((this.lockoutUntil - Date.now()) / 1000);
+        alert(`Ввод заблокирован из-за неверных попыток. Подождите ${sec} сек.`);
+        this.currentPinInput = '';
+        this.updatePinDots();
+        return;
+      }
+
       if (this.currentPinInput === this.correctPin) {
+        this.failedPinAttempts = 0;
         sessionStorage.setItem('app_unlocked', 'true');
         this.unlockApp(true);
       } else {
+        this.failedPinAttempts = (this.failedPinAttempts || 0) + 1;
         const container = document.getElementById('pin-display');
         container.classList.add('animate-shake');
+
+        if (this.failedPinAttempts >= 5) {
+          this.lockoutUntil = Date.now() + 30000;
+          setTimeout(() => {
+            alert('Слишком много неверных попыток ввода PIN-кода. Ввод заблокирован на 30 секунд.');
+          }, 350);
+        }
+
         setTimeout(() => {
           container.classList.remove('animate-shake');
           this.currentPinInput = '';

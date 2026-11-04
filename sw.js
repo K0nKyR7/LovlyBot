@@ -2,7 +2,7 @@
 // SERVICE WORKER • НАША ИСТОРИЯ (PWA & OFFLINE CACHE)
 // ============================================================
 
-const CACHE_NAME = 'love-story-v1';
+const CACHE_NAME = 'love-story-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -37,17 +37,37 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: Stale-while-revalidate for local assets, Network-first for API
+// Fetch: Stale-while-revalidate for local assets, cache-first for stored media, network-first for live API
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET requests and Supabase REST/Storage requests
+  // Skip non-GET requests
   if (event.request.method !== 'GET') return;
-  if (url.hostname.includes('supabase.co')) return;
+
+  // Supabase REST queries should always be network-first/live (never cached by SW)
+  if (url.hostname.includes('supabase.co') && url.pathname.includes('/rest/v1/')) return;
+
+  // Telegram API bypass
   if (url.hostname.includes('telegram.org')) return;
-  if (url.hostname.includes('openstreetmap.org')) return;
-  if (url.hostname.includes('arcgisonline.com')) return;
-  if (url.hostname.includes('2gis.ru') || url.hostname.includes('2gis.com')) return;
+
+  // Caching Supabase Storage photos for offline PWA viewing
+  const isSupabasePhoto = url.hostname.includes('supabase.co') && url.pathname.includes('/storage/v1/object/public/photos/');
+  if (isSupabasePhoto) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          return fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          }).catch(() => cachedResponse);
+        });
+      })
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -73,6 +93,7 @@ self.addEventListener('fetch', (event) => {
           url.hostname.includes('cdn.tailwindcss.com') ||
           url.hostname.includes('fonts.googleapis.com') ||
           url.hostname.includes('fonts.gstatic.com') ||
+          url.hostname.includes('cdn.jsdelivr.net') ||
           url.hostname.includes('unpkg.com')
         ) {
           const responseToCache = networkResponse.clone();
