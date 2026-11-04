@@ -46,6 +46,7 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname.includes('supabase.co')) return;
   if (url.hostname.includes('telegram.org')) return;
   if (url.hostname.includes('openstreetmap.org')) return;
+  if (url.hostname.includes('arcgisonline.com')) return;
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {

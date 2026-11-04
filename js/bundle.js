@@ -945,8 +945,8 @@
         scrollWheelZoom: true
       }).setView([55.7558, 37.6173], 6);
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri &mdash; OpenStreetMap contributors',
         maxZoom: 19
       }).addTo(this.map);
 
