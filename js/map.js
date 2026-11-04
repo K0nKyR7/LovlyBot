@@ -24,10 +24,9 @@ export class MemoryMapEngine {
       scrollWheelZoom: true
     }).setView([55.7558, 37.6173], 6);
 
-    // CartoDB Positron - Clean, elegant, light aesthetic tiles
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-      subdomains: 'abcd',
+    // OpenStreetMap - Free, clear, reliable basemap tiles
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
       maxZoom: 19
     }).addTo(this.map);
 
