@@ -205,18 +205,40 @@ async function forwardGeocode(query) {
   return null;
 }
 
-// Авто-распознавание города/места из текста подписи (например: "в Сочи", "в Москве", "на Красной площади")
+// Авто-распознавание города/места из текста подписи
 async function extractLocationFromCaption(caption) {
   if (!caption) return null;
-  const match = caption.match(/(?:в|на|около|возле)\s+([А-ЯЁ][а-яё\-]+(?:\s+[А-ЯЁ][а-яё\-]+)?)/i);
-  if (match) {
-    const place = match[1].trim();
-    const blacklist = ['Этот', 'Наш', 'Твой', 'Мой', 'Первый', 'Самый', 'Прекрасный'];
+  const clean = caption.trim();
+
+  // 1. Поиск предлогов "в Сочи", "на Красной площади", "около..."
+  const prepMatch = clean.match(/(?:в|на|около|возле|город|г\.)\s+([А-ЯЁ][а-яё\-]+(?:\s+[А-ЯЁ][а-яё\-]+)?)/i);
+  if (prepMatch) {
+    const place = prepMatch[1].trim();
+    const blacklist = ['Этот', 'Наш', 'Твой', 'Мой', 'Первый', 'Самый', 'Прекрасный', 'Один'];
     if (!blacklist.includes(place) && place.length >= 3) {
       const geo = await forwardGeocode(place);
       if (geo) return geo;
     }
   }
+
+  // 2. Список популярных городов и локаций для быстрого распознавания
+  const popularPlaces = ['Москва', 'Санкт-Петербург', 'Питер', 'Сочи', 'Адлер', 'Красная Поляна', 'Казань', 'Калининград', 'Екатеринбург', 'Нижний Новгород', 'Владивосток', 'Дубай', 'Париж', 'Рим'];
+  for (const p of popularPlaces) {
+    const reg = new RegExp(`\\b${p}\\b`, 'i');
+    if (reg.test(clean)) {
+      const query = p === 'Питер' ? 'Санкт-Петербург' : p;
+      const geo = await forwardGeocode(query);
+      if (geo) return geo;
+    }
+  }
+
+  // 3. Если подпись очень короткая (1-3 слова), пробуем геокодировать её целиком
+  const words = clean.split(/\s+/);
+  if (words.length <= 3 && clean.length >= 3 && clean.length <= 40) {
+    const geo = await forwardGeocode(clean);
+    if (geo) return geo;
+  }
+
   return null;
 }
 
@@ -359,6 +381,29 @@ function makeMomentKeyboard(momentId) {
       ],
       [
         { text: '📍 Указать место / город', callback_data: `loc:${momentId}` }
+      ]
+    ]
+  };
+}
+
+// Создание инлайн-клавиатуры быстрого выбора локации (при сжатии Telegram)
+function makeLocationKeyboard(momentId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: '📍 Москва', callback_data: `loc_quick:${momentId}:Москва:55.7558:37.6173` },
+        { text: '📍 Сочи', callback_data: `loc_quick:${momentId}:Сочи:43.5855:39.7231` },
+        { text: '📍 СПб', callback_data: `loc_quick:${momentId}:Санкт-Петербург:59.9343:30.3351` }
+      ],
+      [
+        { text: '📍 Казань', callback_data: `loc_quick:${momentId}:Казань:55.7961:49.1064` },
+        { text: '📍 Калининград', callback_data: `loc_quick:${momentId}:Калининград:54.7104:20.4522` }
+      ],
+      [
+        { text: '✏️ Ввести другое место / город', callback_data: `loc:${momentId}` }
+      ],
+      [
+        { text: '🏷️ Выбрать категорию', callback_data: `cats_menu:${momentId}` }
       ]
     ]
   };
@@ -673,10 +718,14 @@ async function processSinglePhoto(msg, isDocImage) {
     lastUserMoments.set(userId, { momentId, title: moment.title, timestamp: Date.now() });
 
     let locationInfoText = '';
+    let replyKeyboard = null;
+
     if (detectedLocation) {
-      locationInfoText = `\n📍 <b>Авто-локация:</b> <i>${detectedLocation}</i>\n🗺️ Метка уже на карте!`;
+      locationInfoText = `\n📍 <b>Локация:</b> <i>${detectedLocation}</i>\n🗺️ Метка уже в Атласе мест на сайте!`;
+      replyKeyboard = makeMomentKeyboard(momentId);
     } else {
-      locationInfoText = `\n💡 <i>Хочешь поставить метку на карте? Нажми кнопку ниже или отправь геопозицию через 📎</i>`;
+      locationInfoText = `\n💡 <i>Telegram сжал фото и стёр GPS. Выбери город кнопкой ниже или отправь геопозицию через 📎:</i>\n<i>(Чтобы геометка сохранялась с камеры — отправляй фото через 📎 ➔ «Файл»)</i>`;
+      replyKeyboard = makeLocationKeyboard(momentId);
     }
 
     await sendMessage(
@@ -684,9 +733,8 @@ async function processSinglePhoto(msg, isDocImage) {
       `🎉 <b>Фото успешно сохранено!</b>\n\n` +
       `📝 Заголовок: <i>${moment.title}</i>\n` +
       `📅 Дата: <i>${moment.date}</i>` +
-      locationInfoText + `\n\n` +
-      `Выбери категорию для этого момента:`,
-      makeMomentKeyboard(momentId)
+      locationInfoText,
+      replyKeyboard
     );
 
   } catch (err) {
@@ -766,14 +814,17 @@ async function processMediaGroup(queueObj) {
     const leadMoment = createdMoments[0];
     lastUserMoments.set(userId, { momentId: leadMoment.id, title: leadMoment.title, timestamp: Date.now() });
 
+    const albumKeyboard = detectedLocation ? makeMomentKeyboard(leadMoment.id) : makeLocationKeyboard(leadMoment.id);
+
     await sendMessage(
       chatId,
       `🎉 <b>Альбом из ${createdMoments.length} фото успешно сохранён!</b>\n\n` +
       `📝 Название: <i>${leadMoment.title}</i>\n` +
-      (detectedLocation ? `📍 Локация: <b>${detectedLocation}</b>\n` : '') +
-      `Все фотографии уже на сайте 💖\n\n` +
-      `Выбери общую категорию для альбома:`,
-      makeMomentKeyboard(leadMoment.id)
+      (detectedLocation 
+        ? `📍 Локация: <b>${detectedLocation}</b>\n` 
+        : `💡 <i>Выбери город для альбома кнопкой ниже или отправь геопозицию через 📎:</i>\n`) +
+      `Все фотографии уже на сайте 💖`,
+      albumKeyboard
     );
   }
 }
@@ -791,6 +842,35 @@ async function handleCallbackQuery(query) {
       callback_query_id: query.id,
       text: '🔒 Этот бот является приватным архивом пары. Доступ ограничен.',
       show_alert: true
+    });
+  }
+
+  // Меню выбора категории
+  if (data.startsWith('cats_menu:')) {
+    const [, momentId] = data.split(':');
+    return tg('editMessageReplyMarkup', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: makeMomentKeyboard(momentId)
+    });
+  }
+
+  // Быстрый выбор города в 1 клик (решение проблемы потери EXIF при сжатии Telegram)
+  if (data.startsWith('loc_quick:')) {
+    const [, momentId, cityName, latStr, lngStr] = data.split(':');
+    const lat = parseFloat(latStr);
+    const lng = parseFloat(lngStr);
+    await updateMomentLocation(momentId, lat, lng, cityName);
+    await tg('answerCallbackQuery', {
+      callback_query_id: query.id,
+      text: `📍 Локация «${cityName}» сохранена!`
+    });
+    return tg('editMessageText', {
+      chat_id: chatId,
+      message_id: messageId,
+      text: `✅ <b>Локация сохранена: ${cityName}!</b>\nФото привязано к карте и уже появилось в Атласе мест на сайте 💖\n\nТеперь выбери категорию для этого момента:`,
+      parse_mode: 'HTML',
+      reply_markup: makeMomentKeyboard(momentId)
     });
   }
 

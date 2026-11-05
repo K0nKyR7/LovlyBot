@@ -138,7 +138,7 @@ body {
 
 /* Masonry column support */
 .masonry-grid {
-  column-count: 1;
+  column-count: 2;
   column-gap: 1.25rem;
 }
 @media (min-width: 640px) {
@@ -146,9 +146,24 @@ body {
     column-count: 2;
   }
 }
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .masonry-grid {
     column-count: 3;
+  }
+}
+@media (min-width: 1100px) {
+  .masonry-grid {
+    column-count: 4;
+  }
+}
+@media (min-width: 1500px) {
+  .masonry-grid {
+    column-count: 5;
+  }
+}
+@media (min-width: 1900px) {
+  .masonry-grid {
+    column-count: 6;
   }
 }
 .masonry-item {
@@ -156,20 +171,31 @@ body {
   margin-bottom: 1.25rem;
 }
 
-/* Custom 2GIS Map styling */
+/* Custom Interactive Leaflet Map styling */
+#interactive-atlas-map .leaflet-pane {
+  z-index: 10;
+}
+#interactive-atlas-map .leaflet-top,
+#interactive-atlas-map .leaflet-bottom {
+  z-index: 20;
+}
 .custom-map-heart-marker {
   background: transparent;
   border: none;
 }
-.custom-map-popup .leaflet-popup-content-wrapper,
-.custom-map-popup .dg-popup-content-wrapper {
+.custom-map-popup .leaflet-popup-content-wrapper {
   border-radius: 1.25rem;
   padding: 0.25rem;
   box-shadow: 0 12px 30px -6px rgba(225, 29, 72, 0.2);
   border: 1px solid rgba(254, 205, 211, 0.8);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
 }
-.custom-map-popup .leaflet-popup-tip,
-.custom-map-popup .dg-popup-tip {
+.custom-map-popup .leaflet-popup-content {
+  margin: 0.5rem;
+  line-height: 1.4;
+}
+.custom-map-popup .leaflet-popup-tip {
   background: white;
 }
 

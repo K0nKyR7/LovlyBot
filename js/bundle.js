@@ -637,6 +637,41 @@
       return moment;
     }
 
+    async updateMomentLocation(id, location, lat, lng) {
+      let moments = await this.getAllFromStore(STORE_MOMENTS);
+      let moment = moments.find((m) => m.id === id);
+
+      if (!moment && this.supabaseClient) {
+        try {
+          const { data } = await this.supabaseClient.from('moments').select('*').eq('id', id).maybeSingle();
+          if (data) {
+            moment = data;
+            await this.putToStore(STORE_MOMENTS, moment);
+          }
+        } catch (e) {}
+      }
+      if (!moment) return null;
+
+      moment.location = location;
+      moment.lat = lat !== undefined && lat !== null && !isNaN(Number(lat)) ? Number(lat) : null;
+      moment.lng = lng !== undefined && lng !== null && !isNaN(Number(lng)) ? Number(lng) : null;
+
+      await this.putToStore(STORE_MOMENTS, moment);
+
+      if (this.supabaseClient) {
+        try {
+          await this.supabaseClient.from('moments').update({
+            location: moment.location,
+            lat: moment.lat,
+            lng: moment.lng
+          }).eq('id', id);
+        } catch (e) {
+          console.warn('Supabase update location error:', e);
+        }
+      }
+      return moment;
+    }
+
     async deleteMoment(id, moment = null) {
       await this.deleteFromStore(STORE_MOMENTS, id);
       if (this.supabaseClient) {
@@ -782,37 +817,65 @@
 
     if (isLocked) {
       return `
-        <div class="masonry-item relative group rounded-2xl overflow-hidden shadow-sm glass-card border border-rose-200 bg-gradient-to-tr from-rose-950 to-pink-900 p-6 flex flex-col items-center justify-center text-center text-white min-h-[200px]" data-id="${moment.id}">
-          <div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center mb-2 animate-pulse">
+        <div class="masonry-item relative group rounded-3xl overflow-hidden shadow-sm glass-card border border-rose-200 bg-gradient-to-tr from-rose-950 to-pink-900 p-6 flex flex-col items-center justify-center text-center text-white min-h-[220px]" data-id="${moment.id}">
+          <div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center mb-3 animate-pulse">
             <i class="fa-solid fa-lock text-rose-300"></i>
           </div>
           <span class="text-[10px] tracking-widest uppercase text-rose-200 font-semibold mb-1">Капсула времени</span>
-          <h4 class="font-serif-romantic text-base font-bold">${escapeHtml(moment.title)}</h4>
+          <h4 class="font-serif-romantic text-lg font-bold">${escapeHtml(moment.title)}</h4>
           <p class="text-xs text-rose-200/80 mt-1">Откроется ${formatDateRu(moment.unlockDate)}</p>
         </div>
       `;
     }
 
+    const hasLocation = moment.location && moment.location.trim();
+    const locationLabel = hasLocation ? escapeHtml(moment.location) : '+ Указать место';
+
     return `
-      <div class="masonry-item relative group rounded-2xl overflow-hidden shadow-sm glass-card border border-rose-100 cursor-pointer moment-image-trigger" data-id="${moment.id}">
-        <img src="${escapeHtml(moment.imageUrl)}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500" />
-        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-4 text-white">
-          <div class="flex justify-between items-center">
-            <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-white/20 backdrop-blur-md">
+      <div class="masonry-item relative group rounded-3xl overflow-hidden shadow-sm hover:shadow-xl glass-card border border-rose-100/90 transition-all duration-300 flex flex-col bg-white/95" data-id="${moment.id}">
+        <!-- Photo Container -->
+        <div class="relative overflow-hidden cursor-pointer moment-image-trigger" data-id="${moment.id}">
+          <img src="${escapeHtml(moment.imageUrl)}" alt="${escapeHtml(moment.title)}" loading="lazy" class="w-full h-auto object-cover group-hover:scale-[1.03] transition-transform duration-500 block" />
+          
+          <!-- Category chip on top-left -->
+          <div class="absolute top-3 left-3 z-10">
+            <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/45 backdrop-blur-md text-white border border-white/20 shadow-xs">
               ${escapeHtml(moment.category || 'Фото')}
             </span>
-            <button class="like-btn p-2 rounded-full backdrop-blur-md bg-white/20 hover:bg-white/40 text-rose-400" data-id="${moment.id}" onclick="event.stopPropagation()">
-              <i class="${isLiked ? 'fa-solid text-rose-400' : 'fa-regular text-white'} fa-heart"></i>
-            </button>
           </div>
-          <div>
-            <h4 class="font-serif-romantic text-lg sm:text-xl font-bold leading-tight drop-shadow-sm">
+
+          <!-- Like button on top-right -->
+          <button class="like-btn absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white shadow-xs transition-transform active:scale-90" data-id="${moment.id}" onclick="event.stopPropagation()">
+            <i class="${isLiked ? 'fa-solid text-rose-400' : 'fa-regular text-white'} fa-heart text-sm"></i>
+          </button>
+        </div>
+
+        <!-- Always-Visible Bottom Info Bar -->
+        <div class="p-3.5 sm:p-4 flex flex-col gap-1.5 border-t border-rose-50/80 bg-white/60">
+          <div class="flex items-start justify-between gap-2">
+            <h4 class="font-serif-romantic text-base sm:text-lg font-bold text-zinc-900 leading-snug line-clamp-1 cursor-pointer moment-image-trigger" data-id="${moment.id}">
               ${escapeHtml(moment.title)}
             </h4>
-            <p class="text-xs text-rose-100/90 mt-1 flex items-center gap-1.5">
-              <i class="fa-regular fa-calendar text-[10px]"></i>
+            <span class="text-[11px] text-zinc-400 shrink-0 mt-0.5 font-medium">
               ${formatDateRu(moment.date)}
-            </p>
+            </span>
+          </div>
+
+          <!-- Location Badge / Edit button -->
+          <div class="flex items-center justify-between gap-2 pt-0.5">
+            <button 
+              class="edit-location-trigger inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium transition-colors ${hasLocation ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100' : 'bg-zinc-100/80 hover:bg-rose-50 text-zinc-500 hover:text-rose-600 border border-dashed border-zinc-200'}" 
+              data-id="${moment.id}" 
+              title="${hasLocation ? 'Изменить локацию на карте' : 'Указать город или координаты для Атласа мест'}"
+              onclick="event.stopPropagation()"
+            >
+              <i class="fa-solid fa-location-dot text-[10px] ${hasLocation ? 'text-rose-500' : 'text-zinc-400'}"></i>
+              <span class="truncate max-w-[170px] sm:max-w-[210px]">${locationLabel}</span>
+            </button>
+
+            <button class="delete-moment-btn text-zinc-300 hover:text-rose-500 p-1 transition-colors" data-id="${moment.id}" title="Удалить" onclick="event.stopPropagation()">
+              <i class="fa-regular fa-trash-can text-xs"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -950,12 +1013,17 @@
     }
   }
 
-  // --- 9. LOVE ATLAS ENGINE (SEXY, ZERO-DEPENDENCY, NATIVE YANDEX MAPS LINKS) ---
+  // --- 9. LOVE ATLAS ENGINE (INTERACTIVE LEAFLET MAP + YANDEX MAPS ROUTING) ---
   class LoveAtlasEngine {
-    constructor(onMomentClick) {
+    constructor(onMomentClick, onEditLocationClick) {
       this.onMomentClick = onMomentClick;
+      this.onEditLocationClick = onEditLocationClick;
       this.activeCityFilter = 'all';
       this.moments = [];
+      this.map = null;
+      this.markersLayer = null;
+      this.routeLine = null;
+      this.markersMap = new Map();
     }
 
     calculateDistanceKm(lat1, lon1, lat2, lon2) {
@@ -970,12 +1038,63 @@
       return R * c;
     }
 
+    initMapIfNeeded() {
+      const mapEl = document.getElementById('interactive-atlas-map');
+      if (!mapEl || this.map || typeof window.L === 'undefined') return;
+
+      try {
+        this.map = L.map('interactive-atlas-map', {
+          attributionControl: false,
+          zoomControl: false,
+          center: [55.7558, 37.6173],
+          zoom: 5
+        });
+
+        L.control.zoom({ position: 'topright' }).addTo(this.map);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: ''
+        }).addTo(this.map);
+
+        this.markersLayer = L.layerGroup().addTo(this.map);
+      } catch (e) {
+        console.warn('Map initialization error:', e);
+      }
+    }
+
+    invalidateMapSize() {
+      if (this.map) {
+        setTimeout(() => {
+          try {
+            this.map.invalidateSize();
+          } catch (e) {}
+        }, 120);
+      }
+    }
+
+    flyToMoment(moment) {
+      if (!this.map || !moment || !moment.lat || !moment.lng) return;
+      const mapEl = document.getElementById('interactive-atlas-map');
+      if (mapEl) {
+        mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      this.map.flyTo([moment.lat, moment.lng], 14, { duration: 1.2 });
+      const marker = this.markersMap.get(moment.id);
+      if (marker) {
+        setTimeout(() => marker.openPopup(), 1250);
+      }
+    }
+
     render(moments) {
       this.moments = moments || [];
       const container = document.getElementById('atlas-places-container');
       const emptyState = document.getElementById('empty-atlas-state');
       const filterContainer = document.getElementById('atlas-city-filters');
+      const mapEl = document.getElementById('interactive-atlas-map');
       if (!container) return;
+
+      this.initMapIfNeeded();
 
       // Filter moments that have location or coordinates
       const withLoc = this.moments.filter(m => (m.location && m.location.trim()) || (m.lat && m.lng));
@@ -984,11 +1103,13 @@
         container.innerHTML = '';
         if (filterContainer) filterContainer.innerHTML = '';
         if (emptyState) emptyState.classList.remove('hidden');
+        if (mapEl) mapEl.classList.add('hidden');
         this.updateStats(0, 0, 0, 0);
         return;
       }
 
       if (emptyState) emptyState.classList.add('hidden');
+      if (mapEl) mapEl.classList.remove('hidden');
 
       // Sort chronologically
       const sorted = [...withLoc].sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -1048,9 +1169,88 @@
         ? sorted
         : sorted.filter(m => (m.location || '').includes(this.activeCityFilter));
 
+      // Render interactive Leaflet Map Markers & Journey Line
+      if (this.map && this.markersLayer && typeof window.L !== 'undefined') {
+        this.markersLayer.clearLayers();
+        this.markersMap.clear();
+        if (this.routeLine) {
+          try { this.map.removeLayer(this.routeLine); } catch (e) {}
+          this.routeLine = null;
+        }
+
+        const geoMoments = displayMoments.filter(m => typeof m.lat === 'number' && typeof m.lng === 'number' && !isNaN(m.lat) && !isNaN(m.lng));
+
+        geoMoments.forEach(m => {
+          const heartIcon = L.divIcon({
+            className: 'custom-map-heart-marker',
+            html: `
+              <div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white flex items-center justify-center shadow-lg shadow-rose-500/40 border-2 border-white cursor-pointer transition-transform hover:scale-110 active:scale-95">
+                <i class="fa-solid fa-heart text-sm"></i>
+              </div>
+            `,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+            popupAnchor: [0, -20]
+          });
+
+          const marker = L.marker([m.lat, m.lng], { icon: heartIcon });
+          const yandexUrl = `https://yandex.ru/maps/?pt=${m.lng},${m.lat}&z=16&l=map`;
+          const popupHtml = `
+            <div class="p-1 max-w-[210px] text-zinc-800 text-center">
+              <div class="w-full h-24 rounded-xl overflow-hidden mb-2 bg-rose-50 border border-rose-100">
+                <img src="${escapeHtml(m.imageUrl)}" alt="${escapeHtml(m.title)}" class="w-full h-full object-cover">
+              </div>
+              <h4 class="font-serif-romantic font-bold text-sm text-zinc-900 leading-tight">${escapeHtml(m.title)}</h4>
+              <p class="text-[11px] text-rose-600 font-medium mt-0.5">${formatDateRu(m.date)}</p>
+              <p class="text-[11px] text-zinc-500 mt-1 flex items-center justify-center gap-1">
+                <i class="fa-solid fa-location-dot text-rose-500 text-[10px]"></i>
+                <span class="truncate">${escapeHtml(m.location || 'Памятное место')}</span>
+              </p>
+              <div class="mt-2.5 flex items-center justify-center gap-1.5">
+                <button class="map-popup-photo-btn px-2.5 py-1 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-colors" data-id="${m.id}">Фото</button>
+                <a href="${yandexUrl}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-semibold flex items-center gap-1 transition-colors">Яндекс</a>
+              </div>
+            </div>
+          `;
+          marker.bindPopup(popupHtml, { className: 'custom-map-popup' });
+          marker.on('popupopen', () => {
+            const btn = document.querySelector(`.map-popup-photo-btn[data-id="${m.id}"]`);
+            if (btn) {
+              btn.onclick = () => {
+                if (this.onMomentClick) this.onMomentClick(m);
+              };
+            }
+          });
+
+          marker.addTo(this.markersLayer);
+          this.markersMap.set(m.id, marker);
+        });
+
+        // Journey route polyline
+        if (geoMoments.length >= 2) {
+          const latlngs = geoMoments.map(m => [m.lat, m.lng]);
+          this.routeLine = L.polyline(latlngs, {
+            color: '#e11d48',
+            weight: 3.5,
+            opacity: 0.85,
+            dashArray: '8, 8',
+            className: 'romantic-route-line'
+          }).addTo(this.map);
+        }
+
+        // View bounds
+        if (geoMoments.length === 1) {
+          this.map.setView([geoMoments[0].lat, geoMoments[0].lng], 13);
+        } else if (geoMoments.length > 1) {
+          const bounds = L.latLngBounds(geoMoments.map(m => [m.lat, m.lng]));
+          this.map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+        }
+
+        this.invalidateMapSize();
+      }
+
       // Render Atlas Cards
       container.innerHTML = displayMoments.map((m, idx) => {
-        // Distance from previous place
         let distanceBadge = '';
         if (idx > 0 && m.lat && m.lng && displayMoments[idx - 1].lat && displayMoments[idx - 1].lng) {
           const dist = this.calculateDistanceKm(
@@ -1064,7 +1264,6 @@
           }
         }
 
-        // Direct Yandex Maps URL
         let yandexUrl = '';
         if (m.lat && m.lng) {
           yandexUrl = `https://yandex.ru/maps/?pt=${m.lng},${m.lat}&z=16&l=map`;
@@ -1073,8 +1272,8 @@
         }
 
         return `
-          <div class="glass-card rounded-2xl p-4 border border-rose-100/80 hover:border-rose-300 transition-all duration-300 shadow-xs hover:shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div class="flex items-center gap-3.5 flex-1 min-w-0">
+          <div class="glass-card rounded-2xl p-4 border border-rose-100/90 hover:border-rose-300 transition-all duration-300 shadow-xs hover:shadow-md flex flex-col justify-between gap-3 bg-white/85">
+            <div class="flex items-center gap-3 min-w-0">
               <div 
                 class="atlas-photo-trigger w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 bg-rose-50 cursor-pointer relative group border border-rose-100"
                 data-id="${m.id}"
@@ -1087,8 +1286,8 @@
               </div>
 
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 flex-wrap mb-1">
-                  <span class="text-xs px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-600 border border-rose-100">
+                <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                  <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-rose-50 text-rose-600 border border-rose-100">
                     ${escapeHtml(m.category || 'Воспоминание')}
                   </span>
                   <span class="text-[11px] text-zinc-400 font-medium">
@@ -1108,27 +1307,47 @@
               </div>
             </div>
 
-            <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-rose-50">
+            <!-- Action buttons -->
+            <div class="flex items-center gap-1.5 pt-2 border-t border-rose-50 flex-wrap justify-end">
+              ${m.lat && m.lng ? `
+                <button 
+                  class="atlas-focus-map-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors flex items-center gap-1"
+                  data-id="${m.id}"
+                  title="Показать на карте"
+                >
+                  <i class="fa-solid fa-map-pin text-[11px] text-rose-500"></i>
+                  <span>На карте</span>
+                </button>
+              ` : ''}
+
               ${yandexUrl ? `
                 <a 
                   href="${yandexUrl}" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 transition-colors flex items-center gap-1.5 shadow-xs"
-                  title="Открыть эту точку в приложении Яндекс Карт"
+                  class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors flex items-center gap-1"
+                  title="Открыть в Яндекс Картах"
                 >
                   <i class="fa-solid fa-location-arrow text-[11px] text-amber-600"></i>
-                  <span>В Яндекс Карты</span>
+                  <span>Яндекс</span>
                 </a>
               ` : ''}
 
               <button 
-                class="atlas-view-moment-btn px-3 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-100 transition-colors flex items-center gap-1.5"
+                class="edit-location-trigger px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-zinc-600 hover:text-rose-600 border border-rose-100 transition-colors flex items-center gap-1"
+                data-id="${m.id}"
+                title="Изменить город или адрес"
+              >
+                <i class="fa-solid fa-pen text-[10px]"></i>
+                <span>Изменить</span>
+              </button>
+
+              <button 
+                class="atlas-view-moment-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-rose-50 text-rose-600 border border-rose-100 transition-colors flex items-center gap-1"
                 data-id="${m.id}"
                 title="Подробнее о моменте"
               >
                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                <span class="hidden sm:inline">Фото</span>
               </button>
             </div>
           </div>
@@ -1142,6 +1361,26 @@
           const moment = this.moments.find(m => m.id === id);
           if (moment && this.onMomentClick) {
             this.onMomentClick(moment);
+          }
+        };
+      });
+
+      container.querySelectorAll('.atlas-focus-map-btn').forEach(el => {
+        el.onclick = () => {
+          const id = el.getAttribute('data-id');
+          const moment = this.moments.find(m => m.id === id);
+          if (moment) {
+            this.flyToMoment(moment);
+          }
+        };
+      });
+
+      container.querySelectorAll('.edit-location-trigger').forEach(el => {
+        el.onclick = () => {
+          const id = el.getAttribute('data-id');
+          const moment = this.moments.find(m => m.id === id);
+          if (moment && this.onEditLocationClick) {
+            this.onEditLocationClick(moment);
           }
         };
       });
@@ -1302,7 +1541,7 @@
   class LoveStoryApp {
     constructor() {
       this.moments = [];
-      this.currentView = 'timeline';
+      this.currentView = 'gallery';
       this.currentFilter = 'Все';
       this.searchQuery = '';
       this.currentPinInput = '';
@@ -1315,7 +1554,10 @@
       this.audio = new AmbientAudio();
       this.storage = new StorageManager();
       this.exifEngine = new ExifGeoEngine();
-      this.atlasEngine = new LoveAtlasEngine((m) => this.openLightbox(m));
+      this.atlasEngine = new LoveAtlasEngine(
+        (m) => this.openLightbox(m),
+        (m) => this.openEditLocationModal(m)
+      );
       this.photobook = new PhotobookGenerator();
       this.activeLightboxMoment = null;
       this.uploadedImageBlob = null;
@@ -1324,6 +1566,7 @@
       this.slideshowIndex = 0;
       this.isSlideshowPlaying = false;
       this.slideshowList = [];
+      this.locationSearchTimeout = null;
     }
 
     async init() {
@@ -1355,6 +1598,7 @@
       }
 
       this.setupGlobalEvents();
+      this.setupLocationModal();
       this.setupCounterTimer();
     }
 
@@ -1471,11 +1715,41 @@
 
     async loadAndRenderAll() {
       this.moments = await this.storage.getMoments();
+      this.updateHeroStats();
       this.renderCategoryPills();
       this.renderFlashback();
       this.syncMobileNavActive();
       this.renderCurrentView();
       this.updateCloudStatusIndicator();
+    }
+
+    updateHeroStats() {
+      const photosEl = document.getElementById('hero-stat-photos');
+      const placesEl = document.getElementById('hero-stat-places');
+      const likedEl = document.getElementById('hero-stat-liked');
+      const capsulesEl = document.getElementById('hero-stat-capsules');
+      const countPill = document.getElementById('hero-photos-count');
+
+      const moments = this.moments || [];
+      const totalPhotos = moments.length;
+      let totalLiked = 0;
+      let totalCapsules = 0;
+      const citiesSet = new Set();
+
+      moments.forEach(m => {
+        if (m.isLiked) totalLiked++;
+        if (m.isCapsule) totalCapsules++;
+        if (m.location) {
+          const city = m.location.split('•').pop().split(',')[0].trim();
+          if (city) citiesSet.add(city);
+        }
+      });
+
+      if (photosEl) photosEl.textContent = totalPhotos;
+      if (placesEl) placesEl.textContent = citiesSet.size || (totalPhotos > 0 ? 1 : 0);
+      if (likedEl) likedEl.textContent = totalLiked;
+      if (capsulesEl) capsulesEl.textContent = totalCapsules;
+      if (countPill) countPill.textContent = `${totalPhotos} фото`;
     }
 
     renderFlashback() {
@@ -1575,6 +1849,9 @@
       });
       this.syncMobileNavActive();
       this.renderCurrentView();
+      if (viewName === 'map' && this.atlasEngine) {
+        this.atlasEngine.invalidateMapSize();
+      }
     }
 
     syncMobileNavActive() {
@@ -1687,6 +1964,7 @@
           if (updated) {
             const idx = this.moments.findIndex(m => m.id === id);
             if (idx !== -1) this.moments[idx] = updated;
+            this.updateHeroStats();
             this.renderCurrentView();
           }
         };
@@ -1700,6 +1978,7 @@
             const momentToDelete = this.moments.find(m => m.id === id);
             await this.storage.deleteMoment(id, momentToDelete);
             this.moments = await this.storage.getMoments();
+            this.updateHeroStats();
             this.renderCurrentView();
           }
         };
@@ -1710,6 +1989,15 @@
           const id = el.getAttribute('data-id');
           const moment = this.moments.find(m => m.id === id);
           if (moment) this.openLightbox(moment);
+        };
+      });
+
+      document.querySelectorAll('.edit-location-trigger').forEach(el => {
+        el.onclick = (e) => {
+          e.stopPropagation();
+          const id = el.getAttribute('data-id');
+          const moment = this.moments.find(m => m.id === id);
+          if (moment) this.openEditLocationModal(moment);
         };
       });
     }
@@ -2384,12 +2672,149 @@
 
       await this.storage.saveMoment(newMoment, this.uploadedImageBlob);
       this.moments = await this.storage.getMoments();
+      this.updateHeroStats();
       this.renderCurrentView();
 
       saveBtn.disabled = false;
       saveBtn.innerText = 'Сохранить момент';
       document.getElementById('add-moment-modal').classList.add('hidden');
       document.getElementById('add-moment-modal').classList.remove('flex');
+    }
+
+    setupLocationModal() {
+      const modal = document.getElementById('edit-location-modal');
+      const closeBtn = document.getElementById('close-edit-location-btn');
+      const form = document.getElementById('edit-location-form');
+      const input = document.getElementById('edit-location-input');
+      const latInp = document.getElementById('edit-location-lat');
+      const lngInp = document.getElementById('edit-location-lng');
+      const statusEl = document.getElementById('edit-location-status');
+      if (!modal) return;
+
+      if (closeBtn) {
+        closeBtn.onclick = () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        };
+      }
+
+      modal.onclick = (e) => {
+        if (e.target.id === 'edit-location-modal') {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+      };
+
+      // Quick 1-click popular city pills
+      document.querySelectorAll('.quick-loc-pill').forEach(btn => {
+        btn.onclick = () => {
+          const city = btn.getAttribute('data-city');
+          const lat = btn.getAttribute('data-lat');
+          const lng = btn.getAttribute('data-lng');
+          if (input) input.value = city;
+          if (latInp) latInp.value = lat;
+          if (lngInp) lngInp.value = lng;
+          if (statusEl) {
+            statusEl.innerHTML = `<span class="text-rose-600 font-medium">📍 Выбран город: ${escapeHtml(city)}</span>`;
+          }
+        };
+      });
+
+      // Typing in input: search Nominatim OSM with debounce
+      if (input) {
+        input.oninput = () => {
+          const query = input.value.trim();
+          clearTimeout(this.locationSearchTimeout);
+          if (query.length < 3) {
+            if (statusEl) statusEl.innerHTML = '';
+            return;
+          }
+          if (statusEl) statusEl.innerHTML = '<span class="text-zinc-400">Поиск координат...</span>';
+          this.locationSearchTimeout = setTimeout(async () => {
+            try {
+              const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+              const res = await fetch(url, { headers: { 'Accept-Language': 'ru' } });
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data.length > 0) {
+                  const place = data[0];
+                  if (latInp) latInp.value = place.lat;
+                  if (lngInp) lngInp.value = place.lon;
+                  if (statusEl) {
+                    const shortName = place.display_name.split(',').slice(0, 3).join(',');
+                    statusEl.innerHTML = `<span class="text-emerald-600 font-medium">📍 Найдено: ${escapeHtml(shortName)}</span>`;
+                  }
+                } else if (statusEl) {
+                  statusEl.innerHTML = '<span class="text-amber-600">Координаты не найдены, но название сохранится</span>';
+                }
+              }
+            } catch (err) {
+              if (statusEl) statusEl.innerHTML = '';
+            }
+          }, 500);
+        };
+      }
+
+      if (form) {
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          const momentId = document.getElementById('edit-location-moment-id').value;
+          const locText = input ? input.value.trim() : '';
+          const latVal = latInp && latInp.value ? parseFloat(latInp.value) : null;
+          const lngVal = lngInp && lngInp.value ? parseFloat(lngInp.value) : null;
+
+          if (!momentId) return;
+
+          const submitBtn = document.getElementById('save-location-btn');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Сохраняем...';
+          }
+
+          const updated = await this.storage.updateMomentLocation(momentId, locText, latVal, lngVal);
+          if (updated) {
+            const idx = this.moments.findIndex(m => m.id === momentId);
+            if (idx !== -1) {
+              this.moments[idx] = updated;
+            }
+          }
+
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Сохранить в Атлас';
+          }
+
+          this.updateHeroStats();
+          this.renderCurrentView();
+        };
+      }
+    }
+
+    openEditLocationModal(moment) {
+      const modal = document.getElementById('edit-location-modal');
+      const idInp = document.getElementById('edit-location-moment-id');
+      const input = document.getElementById('edit-location-input');
+      const latInp = document.getElementById('edit-location-lat');
+      const lngInp = document.getElementById('edit-location-lng');
+      const statusEl = document.getElementById('edit-location-status');
+      if (!modal) return;
+
+      if (idInp) idInp.value = moment.id;
+      if (input) input.value = moment.location || '';
+      if (latInp) latInp.value = moment.lat !== undefined && moment.lat !== null ? moment.lat : '';
+      if (lngInp) lngInp.value = moment.lng !== undefined && moment.lng !== null ? moment.lng : '';
+      if (statusEl) {
+        if (moment.lat && moment.lng) {
+          statusEl.innerHTML = `<span class="text-rose-600 font-medium">📍 Точка на карте: ${moment.lat.toFixed(4)}, ${moment.lng.toFixed(4)}</span>`;
+        } else {
+          statusEl.innerHTML = '';
+        }
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
     }
 
     async populateSettingsForm() {
